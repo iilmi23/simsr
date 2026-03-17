@@ -1,376 +1,472 @@
 import { Link, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
+// ─────────────────────────────────────────────────────────────
+// SVG Icons
+// ─────────────────────────────────────────────────────────────
+const Icons = {
+    Dashboard: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+    ),
+    Master: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+    ),
+    Customers: () => (
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+    ),
+    Ports: () => (
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+    ),
+    CarLine: () => (
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M8 17H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3m-6 0h6m-6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+        </svg>
+    ),
+    UploadSR: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        </svg>
+    ),
+    Summary: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+    ),
+    SPP: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+    ),
+    History: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+    ),
+    Settings: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+    ),
+};
+
+// ─────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────
+export const SIDEBAR_EXPANDED_W = 240;
+export const SIDEBAR_COLLAPSED_W = 68;
+
+const MENU_SECTIONS = [
+    {
+        label: 'MENU',
+        items: [
+            { name: 'Dashboard', icon: 'Dashboard', route: 'dashboard' },
+            {
+                name: 'Master', icon: 'Master',
+                submenu: [
+                    { name: 'Customers', icon: 'Customers', route: 'customers.index' },
+                    { name: 'Car Line', icon: 'CarLine', route: 'carline' },
+                ],
+            },
+        ],
+    },
+    {
+        label: 'SHIPPING RELEASE',
+        items: [
+            { name: 'Upload SR', icon: 'UploadSR', route: 'upload-sr' },
+            { name: 'Summary', icon: 'Summary', route: 'summary' },
+            { name: 'SPP', icon: 'SPP', route: 'spp' },
+            { name: 'History', icon: 'History', route: 'history' },
+        ],
+    },
+    {
+        label: 'SYSTEM',
+        items: [
+            { name: 'Settings', icon: 'Settings', route: 'settings' },
+        ],
+    },
+];
+
+// ─────────────────────────────────────────────────────────────
+// Tooltip (visible only when sidebar is collapsed)
+// ─────────────────────────────────────────────────────────────
+function Tooltip({ label }) {
+    return (
+        <div style={{
+            position: 'absolute',
+            left: 'calc(100% + 8px)',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: '#1c1c1e',
+            color: '#fff',
+            fontSize: '0.72rem',
+            fontWeight: 500,
+            padding: '5px 10px',
+            borderRadius: 7,
+            whiteSpace: 'nowrap',
+            zIndex: 9999,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+            pointerEvents: 'none',
+            letterSpacing: '0.02em',
+        }}>
+            {label}
+            <span style={{
+                position: 'absolute',
+                right: '100%', top: '50%',
+                transform: 'translateY(-50%)',
+                borderWidth: 5, borderStyle: 'solid',
+                borderColor: 'transparent #1c1c1e transparent transparent',
+            }} />
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main Sidebar
+// ─────────────────────────────────────────────────────────────
 export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     const { url } = usePage();
-    const [activeMenu, setActiveMenu] = useState('dashboard');
+    const [activeMenu, setActiveMenu] = useState('Dashboard');
     const [openSubmenu, setOpenSubmenu] = useState(null);
+    const [hovered, setHovered] = useState(null);
 
-    // Menu items untuk SIMSR dengan desain modern
-    const menuItems = [
-        {
-            name: 'Dashboard',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-            ),
-            route: 'dashboard',
-        },
-        {
-            name: 'Masters',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-            ),
-            submenu: [
-                { name: 'Customer', route: 'masters.customer' },
-                { name: 'Ports', route: 'masters.ports' },
-                { name: 'Car Line', route: 'masters.carline' },
-            ]
-        },
-        {
-            name: 'Shipping Release',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
-            ),
-            route: 'upload-sr',
-        },
-        {
-            name: 'Summary',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-            ),
-            route: 'summary',
-            badge: '5',
-            badgeColor: 'bg-blue-500'
-        },
-        {
-            name: 'SPP',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-            ),
-            route: 'spp',
-            badge: '3',
-            badgeColor: 'bg-orange-500'
-        },
-        {
-            name: 'History',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            ),
-            route: 'history',
-        },
-        {
-            name: 'Settings',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-            ),
-            route: 'settings'
+    // ── Route helpers ─────────────────────────────────────────
+    const isActive = (routeName) => {
+        if (!routeName) return false;
+
+        try {
+            const current = url.split('?')[0];
+            const target = route(routeName).split('?')[0];
+
+            return current === target || current.startsWith(target + '/');
+        } catch {
+            return false;
         }
-    ];
+    };
 
-    // Set active menu based on current route
     useEffect(() => {
-        const currentPath = url;
-
-        // Cek di menu utama
-        for (const item of menuItems) {
-            if (item.route && currentPath.includes(item.route)) {
-                setActiveMenu(item.name);
-                break;
-            }
-
-            // Cek di submenu
-            if (item.submenu) {
-                for (const sub of item.submenu) {
-                    if (currentPath.includes(sub.route)) {
-                        setActiveMenu(item.name);
-                        setOpenSubmenu(item.name);
-                        break;
+        for (const sec of MENU_SECTIONS) {
+            for (const item of sec.items) {
+                if (item.route && isActive(item.route)) {
+                    setActiveMenu(item.name); setOpenSubmenu(null); return;
+                }
+                if (item.submenu) {
+                    for (const sub of item.submenu) {
+                        if (isActive(sub.route)) {
+                            setActiveMenu(item.name); setOpenSubmenu(item.name); return;
+                        }
                     }
                 }
             }
         }
     }, [url]);
 
-    const toggleSubmenu = (menuName) => {
-        setOpenSubmenu(openSubmenu === menuName ? null : menuName);
+    const toggleSub = (name) => setOpenSubmenu(prev => prev === name ? null : name);
+    const sidebarW = sidebarOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
+
+    // ─────────────────────────────────────────────────────────
+    // Style helpers
+    // ─────────────────────────────────────────────────────────
+
+    /** Main nav item — black text inactive, white text + green bg active */
+    const itemStyle = (name, extra = {}) => {
+        const act = activeMenu === name;
+        return {
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: sidebarOpen ? '9px 12px' : '9px 0',
+            justifyContent: sidebarOpen ? 'flex-start' : 'center',
+            borderRadius: 10,
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            fontFamily: 'inherit',
+            fontSize: '0.85rem',
+            fontWeight: act ? 600 : 400,
+            letterSpacing: '0.01em',
+            transition: 'background 0.18s, color 0.18s',
+            // ── colour logic ──
+            background: act
+                ? 'linear-gradient(135deg, #1a6338 0%, #22854e 100%)'
+                : 'transparent',
+            color: act ? '#ffffff' : '#1a1a1a',          // BLACK when inactive
+            boxShadow: act ? '0 3px 12px rgba(26,99,56,0.25)' : 'none',
+            ...extra,
+        };
     };
 
+    /** Submenu item */
+    const subItemStyle = (routeName) => {
+        const act = isActive(routeName);
+        return {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 10px',
+            borderRadius: 8,
+            fontSize: '0.8rem',
+            fontWeight: act ? 600 : 400,
+            color: act ? '#1a6338' : '#333333',          // dark grey inactive
+            background: act ? '#e8f5ed' : 'transparent',
+            textDecoration: 'none',
+            transition: 'background 0.15s, color 0.15s',
+            cursor: 'pointer',
+        };
+    };
+
+    /** Icon colour */
+    const iconColor = (name, forActive) => ({
+        color: forActive
+            ? '#ffffff'
+            : (activeMenu === name ? '#ffffff' : '#444444'), // dark icon inactive
+        display: 'flex', alignItems: 'center', flexShrink: 0,
+    });
+
+    const sectionLabel = {
+        display: 'block',
+        fontSize: '0.6rem',
+        fontWeight: 700,
+        color: '#b0b8b4',
+        letterSpacing: '0.13em',
+        textTransform: 'uppercase',
+        padding: '0 14px',
+        marginBottom: 5,
+    };
+
+    // ─────────────────────────────────────────────────────────
+    // Render
+    // ─────────────────────────────────────────────────────────
     return (
         <>
-            {/* Mobile Overlay */}
+            {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 lg:hidden"
                     onClick={() => setSidebarOpen(false)}
+                    style={{
+                        position: 'fixed', inset: 0,
+                        background: 'rgba(0,0,0,0.35)',
+                        backdropFilter: 'blur(3px)',
+                        zIndex: 20,
+                    }}
+                    className="lg:hidden"
                 />
             )}
 
-            {/* Sidebar - Light Mode Only */}
-            <aside
-                className={`fixed lg:static inset-y-0 left-0 z-30 flex flex-col bg-white transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-72 translate-x-0' : 'w-20 -translate-x-full lg:translate-x-0'
-                    }`}
-                style={{
-                    boxShadow: '0 0 20px rgba(0,0,0,0.05)',
-                }}
-            >
-                {/* Logo Area dengan Gambar */}
-                <div className={`h-20 flex items-center border-b border-gray-100 ${sidebarOpen ? 'px-6' : 'px-5'}`}>
-                    {sidebarOpen ? (
-                        <Link href={route('dashboard')} className="flex items-center">
-                            {/* Logo Gambar untuk SIMSR */}
-                            <img
-                                src="/images/logo.png"
-                                alt="SIMSR Logo"
-                                className="h-35 w-auto object-contain"
-                            />
-                            {/* <span className="font-bold text-xl text-gray-800">SIM<span className="text-[#1D6F42]">SR</span></span> */}
-                        </Link>
-                    ) : (
-                        <Link href={route('dashboard')} className="flex items-center justify-start w-full">
-                            {/* Logo kecil untuk collapsed state */}
-                            <img
-                                src="/images/logo-icon.png"
-                                alt="SIMSR"
-                                className="h-8 w-8 object-contain"
-                            />
-                        </Link>
-                    )}
+            {/* ── Sidebar shell ── */}
+            <aside style={{
+                position: 'fixed',
+                top: 0, left: 0, bottom: 0,
+                width: sidebarW,
+                minWidth: sidebarW,
+                background: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                zIndex: 30,
+                transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1)',
+                boxShadow: '1px 0 0 #e8eeea, 4px 0 20px rgba(0,0,0,0.04)',
+                fontFamily: "'DM Sans','Segoe UI',sans-serif",
+                overflowX: 'hidden',
+                overflowY: 'auto',
+            }}>
+
+                {/* ── Logo ── */}
+                <div style={{
+                    height: 64,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                    padding: sidebarOpen ? '0 18px' : '0',
+                    borderBottom: '1px solid #f0f4f2',
+                    flexShrink: 0,
+                }}>
+                    <Link href={route('dashboard')} style={{ display: 'flex', alignItems: 'center' }}>
+                        {sidebarOpen
+                            ? <img src="/images/logo.png" alt="SIMSR" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+                            : <img src="/images/logo-icon.png" alt="SIMSR" style={{ height: 30, width: 30, objectFit: 'contain' }} />
+                        }
+                    </Link>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto py-6 px-4">
-                    {/* Main Menu Section */}
-                    <div className="mb-6">
-                        {sidebarOpen && (
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">
-                                MENU
-                            </p>
-                        )}
-                        <ul className="space-y-1">
-                            {/* Dashboard */}
-                            <li>
-                                <Link
-                                    href={route('dashboard')}
-                                    className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'Dashboard'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <span className={`${activeMenu === 'Dashboard'
-                                            ? 'text-white'
-                                            : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                        }`}>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                        </svg>
-                                    </span>
-                                    {sidebarOpen && <span className="text-sm font-medium ml-3">Dashboard</span>}
-                                </Link>
-                            </li>
+                {/* ── Navigation ── */}
+                <nav style={{ flex: 1, padding: '16px 8px', overflowX: 'hidden' }}>
+                    {MENU_SECTIONS.map((sec) => (
+                        <div key={sec.label} style={{ marginBottom: 20 }}>
 
-                            {/* Masters dengan Submenu */}
-                            <li>
-                                <button
-                                    onClick={() => toggleSubmenu('Masters')}
-                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 ${activeMenu === 'Masters'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <div className="flex items-center">
-                                        <span className={`${activeMenu === 'Masters'
-                                                ? 'text-white'
-                                                : 'text-gray-400'
-                                            }`}>
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                            </svg>
-                                        </span>
-                                        {sidebarOpen && <span className="text-sm font-medium ml-3">Masters</span>}
-                                    </div>
-                                    {sidebarOpen && (
-                                        <svg
-                                            className={`w-4 h-4 transition-transform duration-200 ${openSubmenu === 'Masters' ? 'rotate-180' : ''
-                                                } ${activeMenu === 'Masters' ? 'text-white' : 'text-gray-400'
-                                                }`}
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    )}
-                                </button>
+                            {/* Section label */}
+                            {sidebarOpen
+                                ? <span style={sectionLabel}>{sec.label}</span>
+                                : <div style={{
+                                    height: 1,
+                                    margin: '0 8px 8px',
+                                    background: 'linear-gradient(to right, transparent, #dde8e2, transparent)',
+                                }} />
+                            }
 
-                                {/* Submenu Masters */}
-                                {sidebarOpen && openSubmenu === 'Masters' && (
-                                    <ul className="mt-1 ml-11 space-y-1">
-                                        {menuItems.find(item => item.name === 'Masters').submenu.map((sub) => (
-                                            <li key={sub.name}>
-                                                <Link
-                                                    href={route(sub.route)}
-                                                    className={`block px-3 py-2 text-sm rounded-lg transition-colors ${url.includes(sub.route)
-                                                            ? 'text-[#1D6F42] bg-[#1D6F42]/5 font-medium'
-                                                            : 'text-gray-600 hover:text-[#1D6F42] hover:bg-gray-50'
-                                                        }`}
+                            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                {sec.items.map((item) => {
+                                    const act = activeMenu === item.name;
+                                    const hasSub = !!item.submenu;
+                                    const subOpen = openSubmenu === item.name;
+
+                                    return (
+                                        <li key={item.name} style={{ position: 'relative' }}>
+
+                                            {/* ── Main item ── */}
+                                            {hasSub ? (
+                                                <button
+                                                    onClick={() => sidebarOpen && toggleSub(item.name)}
+                                                    onMouseEnter={() => { if (!sidebarOpen) setHovered(item.name); }}
+                                                    onMouseLeave={() => { if (!sidebarOpen) setHovered(null); }}
+                                                    onMouseOver={e => { if (!act) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a1a1a'; } }}
+                                                    onMouseOut={e => { if (!act) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1a1a1a'; } }}
+                                                    style={{
+                                                        ...itemStyle(item.name),
+                                                        justifyContent: sidebarOpen ? 'space-between' : 'center',
+                                                    }}
                                                 >
-                                                    {sub.name}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: sidebarOpen ? 10 : 0 }}>
+                                                        <span style={{ color: act ? '#fff' : '#444', display: 'flex' }}>
+                                                            {Icons[item.icon]?.()}
+                                                        </span>
+                                                        {sidebarOpen && <span>{item.name}</span>}
+                                                    </div>
+                                                    {sidebarOpen && (
+                                                        <svg
+                                                            style={{
+                                                                width: 13, height: 13,
+                                                                transform: subOpen ? 'rotate(180deg)' : 'none',
+                                                                transition: 'transform 0.2s',
+                                                                color: act ? '#fff' : '#999',
+                                                                flexShrink: 0,
+                                                            }}
+                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            ) : (
+                                                <Link
+                                                    href={route(item.route)}
+                                                    onMouseEnter={() => { if (!sidebarOpen) setHovered(item.name); }}
+                                                    onMouseLeave={() => { if (!sidebarOpen) setHovered(null); }}
+                                                    onMouseOver={e => { if (!act) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a1a1a'; } }}
+                                                    onMouseOut={e => { if (!act) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1a1a1a'; } }}
+                                                    style={itemStyle(item.name)}
+                                                >
+                                                    <span style={{ color: act ? '#fff' : '#444', display: 'flex', flexShrink: 0 }}>
+                                                        {Icons[item.icon]?.()}
+                                                    </span>
+                                                    {sidebarOpen && <span style={{ marginLeft: 10 }}>{item.name}</span>}
                                                 </Link>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </li>
-                        </ul>
-                    </div>
+                                            )}
 
-                    {/* Shipping Release Section */}
-                    <div className="mb-6">
-                        {sidebarOpen && (
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">
-                                SHIPPING RELEASE
-                            </p>
-                        )}
-                        <ul className="space-y-1">
-                            {/* Upload SR */}
-                            <li>
-                                <Link
-                                    href={route('upload-sr')}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'Upload SR'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <div className="flex items-center">
-                                        <span className={`${activeMenu === 'Upload SR'
-                                                ? 'text-white'
-                                                : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                            }`}>
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                                            </svg>
-                                        </span>
-                                        {sidebarOpen && <span className="text-sm font-medium ml-3">Upload SR</span>}
-                                    </div>
-                                </Link>
-                            </li>
+                                            {/* Tooltip when collapsed */}
+                                            {!sidebarOpen && hovered === item.name && (
+                                                <Tooltip label={item.name} />
+                                            )}
 
-                            {/* Summary */}
-                            <li>
-                                <Link
-                                    href={route('summary')}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'Summary'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <div className="flex items-center">
-                                        <span className={`${activeMenu === 'Summary'
-                                                ? 'text-white'
-                                                : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                            }`}>
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </span>
-                                        {sidebarOpen && <span className="text-sm font-medium ml-3">Summary</span>}
-                                    </div>
-                                </Link>
-                            </li>
-
-                            {/* SPP */}
-                            <li>
-                                <Link
-                                    href={route('spp')}
-                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'SPP'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <div className="flex items-center">
-                                        <span className={`${activeMenu === 'SPP'
-                                                ? 'text-white'
-                                                : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                            }`}>
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </span>
-                                        {sidebarOpen && <span className="text-sm font-medium ml-3">SPP</span>}
-                                    </div>
-                                </Link>
-                            </li>
-
-                            {/* History */}
-                            <li>
-                                <Link
-                                    href={route('history')}
-                                    className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'History'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <span className={`${activeMenu === 'History'
-                                            ? 'text-white'
-                                            : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                        }`}>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </span>
-                                    {sidebarOpen && <span className="text-sm font-medium ml-3">History</span>}
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-
-                    {/* System Section */}
-                    <div>
-                        {sidebarOpen && (
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-3">
-                                SYSTEM
-                            </p>
-                        )}
-                        <ul className="space-y-1">
-                            {/* Settings */}
-                            <li>
-                                <Link
-                                    href={route('settings')}
-                                    className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 group ${activeMenu === 'Settings'
-                                            ? 'bg-[#1D6F42] text-white shadow-md shadow-[#1D6F42]/30'
-                                            : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <span className={`${activeMenu === 'Settings'
-                                            ? 'text-white'
-                                            : 'text-gray-400 group-hover:text-[#1D6F42]'
-                                        }`}>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                    </span>
-                                    {sidebarOpen && <span className="text-sm font-medium ml-3">Settings</span>}
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
+                                            {/* ── Submenu ── */}
+                                            {hasSub && sidebarOpen && subOpen && (
+                                                <ul style={{
+                                                    listStyle: 'none',
+                                                    margin: '3px 0 3px 0',
+                                                    padding: '4px 0 4px 12px',
+                                                    borderLeft: '2px solid #d4eadc',
+                                                    marginLeft: 20,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 2,
+                                                }}>
+                                                    {item.submenu.map((sub) => {
+                                                        const subAct = isActive(sub.route);
+                                                        return (
+                                                            <li key={sub.name}>
+                                                                <Link
+                                                                    href={route(sub.route)}
+                                                                    style={subItemStyle(sub.route)}
+                                                                    onMouseOver={e => { if (!subAct) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a6338'; } }}
+                                                                    onMouseOut={e => { if (!subAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#333'; } }}
+                                                                >
+                                                                    <span style={{ color: subAct ? '#1a6338' : '#666', display: 'flex', flexShrink: 0 }}>
+                                                                        {Icons[sub.icon]?.()}
+                                                                    </span>
+                                                                    {sub.name}
+                                                                    {subAct && (
+                                                                        <span style={{
+                                                                            marginLeft: 'auto',
+                                                                            width: 5, height: 5,
+                                                                            borderRadius: '50%',
+                                                                            background: '#1a6338',
+                                                                            flexShrink: 0,
+                                                                        }} />
+                                                                    )}
+                                                                </Link>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    ))}
                 </nav>
+
+                {/* ── Collapse toggle ── */}
+                <div style={{
+                    padding: '12px 8px',
+                    borderTop: '1px solid #f0f4f2',
+                    display: 'flex',
+                    justifyContent: sidebarOpen ? 'flex-end' : 'center',
+                    flexShrink: 0,
+                }}>
+                    <button
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        title={sidebarOpen ? 'Collapse' : 'Expand'}
+                        style={{
+                            width: 30, height: 30,
+                            borderRadius: 8,
+                            border: '1.5px solid #dde8e2',
+                            background: '#f7fbf8',
+                            color: '#7aaa8a',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.18s',
+                        }}
+                        onMouseOver={e => Object.assign(e.currentTarget.style, { background: '#e6f5ed', color: '#1a6338', borderColor: '#aad4b8' })}
+                        onMouseOut={e => Object.assign(e.currentTarget.style, { background: '#f7fbf8', color: '#7aaa8a', borderColor: '#dde8e2' })}
+                    >
+                        <svg
+                            style={{ width: 13, height: 13, transform: sidebarOpen ? 'none' : 'rotate(180deg)', transition: 'transform 0.28s' }}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                </div>
             </aside>
         </>
     );

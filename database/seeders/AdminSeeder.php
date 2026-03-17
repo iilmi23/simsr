@@ -19,7 +19,7 @@ class AdminSeeder extends Seeder
             [
                 'name' => 'Admin PPC',
                 'email' => 'admin@simsr.com',
-                'password' => Hash::make('jai2026'),
+                'password' => Hash::make('jai2026!'),
                 'email_verified_at' => now(), // Langsung verified
             ]
         );

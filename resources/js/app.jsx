@@ -4,6 +4,7 @@ import './bootstrap';
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
+import { SidebarProvider } from './contexts/SidebarContext';
 
 const appName = import.meta.env.VITE_APP_NAME || 'SIMSR';
 
@@ -16,9 +17,10 @@ createInertiaApp({
         ),
     setup({ el, App, props }) {
         const root = createRoot(el);
-
         root.render(
-            <App {...props} />
+            <SidebarProvider>
+                <App {...props} />
+            </SidebarProvider>
         );
     },
     progress: {
