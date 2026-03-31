@@ -36,22 +36,22 @@ export default function Edit({ customer }) {
                     </span>
                 </div>
 
-                {/* Card */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden max-w-3xl">
+                {/* Card - Full Width */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
                     {/* Header */}
-                    <div className="p-6 pb-3">
+                    <div className="p-6 pb-4 border-b border-gray-100">
                         <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
                             Edit Customer
                         </h1>
                         <p className="text-sm text-gray-500 mt-1">
-                            Update customer information
+                            Update customer details.
                         </p>
                     </div>
 
                     {/* Form */}
-                    <div className="px-6 pb-6">
-                        <form onSubmit={submit} className="space-y-5">
+                    <div className="p-6">
+                        <form onSubmit={submit} className="space-y-6">
 
                             {/* Customer Name */}
                             <div>
@@ -64,16 +64,14 @@ export default function Edit({ customer }) {
                                     value={data.name}
                                     onChange={(e) => setData("name", e.target.value)}
                                     placeholder="Enter customer name"
-                                    className={`w-full h-11 px-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42] ${
+                                    className={`w-full h-11 px-4 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42] ${
                                         errors.name ? "border-red-400" : "border-gray-200"
                                     }`}
                                     autoFocus
                                 />
 
                                 {errors.name && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {errors.name}
-                                    </p>
+                                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
                                 )}
                             </div>
 
@@ -88,7 +86,7 @@ export default function Edit({ customer }) {
                                     value={data.code}
                                     onChange={(e) => setData("code", e.target.value)}
                                     placeholder="Enter customer code"
-                                    className="w-full h-11 px-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
+                                    className="w-full h-11 px-4 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
                                 />
                             </div>
 
@@ -103,7 +101,7 @@ export default function Edit({ customer }) {
                                     onChange={(e) => setData("keterangan", e.target.value)}
                                     placeholder="Enter description"
                                     rows="4"
-                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
                                 />
                             </div>
 

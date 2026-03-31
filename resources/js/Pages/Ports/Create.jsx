@@ -6,7 +6,7 @@ export default function Create({ customer }) {
 
     const { data, setData, post, processing, errors } = useForm({
         name: "",
-        description: ""
+        keterangan: ""
     });
 
     const submit = (e) => {
@@ -40,44 +40,39 @@ export default function Create({ customer }) {
 
                 </div>
 
-                <div className="bg-white rounded-2xl border shadow-sm max-w-2xl">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
-                    <div className="p-6 pb-3">
-                        <h1 className="text-2xl font-semibold">
-                            Add Port
-                        </h1>
+                    <div className="p-6 pb-4 border-b border-gray-100">
+                        <h1 className="text-2xl font-semibold text-gray-900">Add Port</h1>
+                        <p className="text-sm text-gray-500 mt-1">Add a new port for {customer.name}.</p>
                     </div>
 
-                    <form onSubmit={submit} className="px-6 pb-6 space-y-5">
+                    <form onSubmit={submit} className="p-6 space-y-6">
 
                         <div>
-                            <label className="text-sm font-semibold">Port Name *</label>
-
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Port Name <span className="text-red-500">*</span></label>
                             <input
                                 value={data.name}
                                 onChange={(e) => setData("name", e.target.value)}
-                                className="w-full h-11 px-3 border rounded-xl mt-1"
+                                className="w-full h-11 px-4 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
                             />
-
                             {errors.name && (
-                                <p className="text-red-500 text-sm">{errors.name}</p>
+                                <p className="text-red-500 text-sm mt-2">{errors.name}</p>
                             )}
-
                         </div>
 
                         <div>
-                            <label className="text-sm font-semibold">Description</label>
-
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                             <textarea
                                 rows="4"
-                                value={data.description}
-                                onChange={(e) => setData("description", e.target.value)}
-                                className="w-full border rounded-xl mt-1 p-2"
+                                value={data.keterangan}
+                                onChange={(e) => setData("keterangan", e.target.value)}
+                                placeholder="Enter description"
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
                             />
-
                         </div>
 
-                        <div className="flex justify-end gap-3">
+                        <div className="flex flex-col sm:flex-row justify-end gap-3">
 
                             <Link
                                 href={`/customers/${customer.id}/ports`}

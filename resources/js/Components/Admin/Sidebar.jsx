@@ -81,9 +81,10 @@ const MENU_SECTIONS = [
         items: [
             { name: 'Dashboard', icon: 'Dashboard', route: 'dashboard' },
             {
-                name: 'Master', icon: 'Master',
+                name: 'Master Data', icon: 'Master',
                 submenu: [
                     { name: 'Customers', icon: 'Customers', route: 'customers.index' },
+                    { name: 'Ports', icon: 'Ports', route: 'ports.index' },
                     { name: 'Car Line', icon: 'CarLine', route: 'carline' },
                 ],
             },
@@ -92,8 +93,8 @@ const MENU_SECTIONS = [
     {
         label: 'SHIPPING RELEASE',
         items: [
-            { name: 'Upload SR', icon: 'UploadSR', route: 'upload-sr' },
-            { name: 'Summary', icon: 'Summary', route: 'summary' },
+            { name: 'Upload SR', icon: 'UploadSR', route: 'sr.upload.page' },
+            { name: 'Summary', icon: 'Summary', route: 'summary.index' },
             { name: 'SPP', icon: 'SPP', route: 'spp' },
             { name: 'History', icon: 'History', route: 'history' },
         ],
@@ -107,7 +108,7 @@ const MENU_SECTIONS = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// Tooltip (visible only when sidebar is collapsed)
+// Tooltip Component
 // ─────────────────────────────────────────────────────────────
 function Tooltip({ label }) {
     return (
@@ -149,45 +150,111 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     const [openSubmenu, setOpenSubmenu] = useState(null);
     const [hovered, setHovered] = useState(null);
 
-    // ── Route helpers ─────────────────────────────────────────
+    // Helper function untuk mendapatkan route URL dengan error handling
+    const getRouteUrl = (routeName, params = {}) => {
+        try {
+            if (!routeName) return '#';
+            if (typeof window.route === 'function') {
+                return window.route(routeName, params);
+            }
+            return '#';
+        } catch (error) {
+            console.warn(`Route "${routeName}" not found:`, error);
+            return '#';
+        }
+    };
+
+    // Helper untuk cek apakah route active
     const isActive = (routeName) => {
         if (!routeName) return false;
 
         try {
-            const current = url.split('?')[0];
-            const target = route(routeName).split('?')[0];
+            const currentUrl = url.split('?')[0];
+            
+            let routeUrl;
+            try {
+                if (typeof window.route === 'function') {
+                    routeUrl = window.route(routeName).split('?')[0];
+                } else {
+                    return false;
+                }
+            } catch (e) {
+                return false;
+            }
 
-            return current === target || current.startsWith(target + '/');
-        } catch {
+            // ========== PERBAIKAN UTAMA ==========
+            // Untuk menu Customers - hanya aktif jika URL tepat /customers atau /customers/{id}/edit
+            // TIDAK aktif jika URL mengandung /ports
+            if (routeName === 'customers.index') {
+                // Jika URL mengandung /ports, maka bukan menu Customers yang aktif
+                if (currentUrl.includes('/ports')) {
+                    return false;
+                }
+                // Aktif jika URL = /customers atau /customers/{id} atau /customers/{id}/edit
+                return currentUrl === '/customers' || 
+                       (currentUrl.startsWith('/customers/') && !currentUrl.includes('/ports'));
+            }
+            
+            // Untuk menu Ports - aktif jika URL /ports ATAU URL mengandung /ports (manage ports per customer)
+            if (routeName === 'ports.index') {
+                // Aktif jika URL = /ports (master data) ATAU URL mengandung /ports (manage ports)
+                return currentUrl === '/ports' || currentUrl.includes('/ports');
+            }
+
+            // Untuk menu lain (Dashboard, Upload SR, Summary, dll)
+            if (currentUrl === routeUrl) {
+                return true;
+            }
+
+            // Pattern khusus untuk Upload SR
+            if (routeName === 'sr.upload.page' && currentUrl.includes('/shipping-release/upload')) {
+                return true;
+            }
+
+            if (routeUrl !== '/' && currentUrl.startsWith(routeUrl + '/')) {
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Error in isActive:', error);
             return false;
         }
     };
 
     useEffect(() => {
+        // Reset active menu based on current URL
+        let found = false;
+
         for (const sec of MENU_SECTIONS) {
             for (const item of sec.items) {
-                if (item.route && isActive(item.route)) {
-                    setActiveMenu(item.name); setOpenSubmenu(null); return;
+                if (item.route && !item.submenu && isActive(item.route)) {
+                    setActiveMenu(item.name);
+                    setOpenSubmenu(null);
+                    found = true;
+                    break;
                 }
+
                 if (item.submenu) {
                     for (const sub of item.submenu) {
                         if (isActive(sub.route)) {
-                            setActiveMenu(item.name); setOpenSubmenu(item.name); return;
+                            setActiveMenu(item.name);
+                            setOpenSubmenu(item.name);
+                            found = true;
+                            break;
                         }
                     }
                 }
+                if (found) break;
             }
+            if (found) break;
         }
     }, [url]);
 
     const toggleSub = (name) => setOpenSubmenu(prev => prev === name ? null : name);
     const sidebarW = sidebarOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
 
-    // ─────────────────────────────────────────────────────────
     // Style helpers
-    // ─────────────────────────────────────────────────────────
-
-    /** Main nav item — black text inactive, white text + green bg active */
     const itemStyle = (name, extra = {}) => {
         const act = activeMenu === name;
         return {
@@ -205,17 +272,15 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
             fontWeight: act ? 600 : 400,
             letterSpacing: '0.01em',
             transition: 'background 0.18s, color 0.18s',
-            // ── colour logic ──
             background: act
                 ? 'linear-gradient(135deg, #1a6338 0%, #22854e 100%)'
                 : 'transparent',
-            color: act ? '#ffffff' : '#1a1a1a',          // BLACK when inactive
+            color: act ? '#ffffff' : '#1a1a1a',
             boxShadow: act ? '0 3px 12px rgba(26,99,56,0.25)' : 'none',
             ...extra,
         };
     };
 
-    /** Submenu item */
     const subItemStyle = (routeName) => {
         const act = isActive(routeName);
         return {
@@ -226,21 +291,13 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
             borderRadius: 8,
             fontSize: '0.8rem',
             fontWeight: act ? 600 : 400,
-            color: act ? '#1a6338' : '#333333',          // dark grey inactive
+            color: act ? '#1a6338' : '#333333',
             background: act ? '#e8f5ed' : 'transparent',
             textDecoration: 'none',
             transition: 'background 0.15s, color 0.15s',
             cursor: 'pointer',
         };
     };
-
-    /** Icon colour */
-    const iconColor = (name, forActive) => ({
-        color: forActive
-            ? '#ffffff'
-            : (activeMenu === name ? '#ffffff' : '#444444'), // dark icon inactive
-        display: 'flex', alignItems: 'center', flexShrink: 0,
-    });
 
     const sectionLabel = {
         display: 'block',
@@ -253,9 +310,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
         marginBottom: 5,
     };
 
-    // ─────────────────────────────────────────────────────────
-    // Render
-    // ─────────────────────────────────────────────────────────
     return (
         <>
             {/* Mobile overlay */}
@@ -272,7 +326,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                 />
             )}
 
-            {/* ── Sidebar shell ── */}
             <aside style={{
                 position: 'fixed',
                 top: 0, left: 0, bottom: 0,
@@ -289,7 +342,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                 overflowY: 'auto',
             }}>
 
-                {/* ── Logo ── */}
+                {/* Logo */}
                 <div style={{
                     height: 64,
                     display: 'flex',
@@ -299,15 +352,15 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                     borderBottom: '1px solid #f0f4f2',
                     flexShrink: 0,
                 }}>
-                    <Link href={route('dashboard')} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Link href={getRouteUrl('dashboard')} style={{ display: 'flex', alignItems: 'center' }}>
                         {sidebarOpen
                             ? <img src="/images/logo.png" alt="SIMSR" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
-                            : <img src="/images/logo-icon.png" alt="SIMSR" style={{ height: 30, width: 30, objectFit: 'contain' }} />
+                            : <img src="/images/logo.png" alt="SIMSR" style={{ height: 30, width: 30, objectFit: 'contain' }} />
                         }
                     </Link>
                 </div>
 
-                {/* ── Navigation ── */}
+                {/* Navigation */}
                 <nav style={{ flex: 1, padding: '16px 8px', overflowX: 'hidden' }}>
                     {MENU_SECTIONS.map((sec) => (
                         <div key={sec.label} style={{ marginBottom: 20 }}>
@@ -327,18 +380,17 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                                     const act = activeMenu === item.name;
                                     const hasSub = !!item.submenu;
                                     const subOpen = openSubmenu === item.name;
+                                    const itemRoute = item.route ? getRouteUrl(item.route) : '#';
 
                                     return (
                                         <li key={item.name} style={{ position: 'relative' }}>
 
-                                            {/* ── Main item ── */}
+                                            {/* Main item */}
                                             {hasSub ? (
                                                 <button
                                                     onClick={() => sidebarOpen && toggleSub(item.name)}
                                                     onMouseEnter={() => { if (!sidebarOpen) setHovered(item.name); }}
                                                     onMouseLeave={() => { if (!sidebarOpen) setHovered(null); }}
-                                                    onMouseOver={e => { if (!act) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a1a1a'; } }}
-                                                    onMouseOut={e => { if (!act) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1a1a1a'; } }}
                                                     style={{
                                                         ...itemStyle(item.name),
                                                         justifyContent: sidebarOpen ? 'space-between' : 'center',
@@ -367,11 +419,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                                                 </button>
                                             ) : (
                                                 <Link
-                                                    href={route(item.route)}
+                                                    href={itemRoute}
                                                     onMouseEnter={() => { if (!sidebarOpen) setHovered(item.name); }}
                                                     onMouseLeave={() => { if (!sidebarOpen) setHovered(null); }}
-                                                    onMouseOver={e => { if (!act) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a1a1a'; } }}
-                                                    onMouseOut={e => { if (!act) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#1a1a1a'; } }}
                                                     style={itemStyle(item.name)}
                                                 >
                                                     <span style={{ color: act ? '#fff' : '#444', display: 'flex', flexShrink: 0 }}>
@@ -386,7 +436,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                                                 <Tooltip label={item.name} />
                                             )}
 
-                                            {/* ── Submenu ── */}
+                                            {/* Submenu */}
                                             {hasSub && sidebarOpen && subOpen && (
                                                 <ul style={{
                                                     listStyle: 'none',
@@ -400,13 +450,13 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                                                 }}>
                                                     {item.submenu.map((sub) => {
                                                         const subAct = isActive(sub.route);
+                                                        const subRoute = getRouteUrl(sub.route);
+
                                                         return (
                                                             <li key={sub.name}>
                                                                 <Link
-                                                                    href={route(sub.route)}
+                                                                    href={subRoute}
                                                                     style={subItemStyle(sub.route)}
-                                                                    onMouseOver={e => { if (!subAct) { e.currentTarget.style.background = '#f3f8f5'; e.currentTarget.style.color = '#1a6338'; } }}
-                                                                    onMouseOut={e => { if (!subAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#333'; } }}
                                                                 >
                                                                     <span style={{ color: subAct ? '#1a6338' : '#666', display: 'flex', flexShrink: 0 }}>
                                                                         {Icons[sub.icon]?.()}
@@ -435,7 +485,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                     ))}
                 </nav>
 
-                {/* ── Collapse toggle ── */}
+                {/* Collapse toggle */}
                 <div style={{
                     padding: '12px 8px',
                     borderTop: '1px solid #f0f4f2',
@@ -456,8 +506,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                             cursor: 'pointer',
                             transition: 'all 0.18s',
                         }}
-                        onMouseOver={e => Object.assign(e.currentTarget.style, { background: '#e6f5ed', color: '#1a6338', borderColor: '#aad4b8' })}
-                        onMouseOut={e => Object.assign(e.currentTarget.style, { background: '#f7fbf8', color: '#7aaa8a', borderColor: '#dde8e2' })}
                     >
                         <svg
                             style={{ width: 13, height: 13, transform: sidebarOpen ? 'none' : 'rotate(180deg)', transition: 'transform 0.28s' }}

@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect } from "react";
 
-const SidebarContext = createContext();
+// ✅ export context juga (biar fleksibel kalau dipakai di tempat lain)
+export const SidebarContext = createContext(null);
 
-export function SidebarProvider({ children }) {
+export default function SidebarProvider({ children }) {
 
     const [sidebarOpen, setSidebarOpen] = useState(() => {
         if (typeof window === "undefined") return true;
@@ -16,12 +17,14 @@ export function SidebarProvider({ children }) {
     const [openSubmenu, setOpenSubmenu] = useState(null);
     const [isMobile, setIsMobile] = useState(false);
 
-    // simpan status sidebar
+    // ✅ simpan ke localStorage
     useEffect(() => {
-        localStorage.setItem("sidebarOpen", sidebarOpen);
+        if (typeof window !== "undefined") {
+            localStorage.setItem("sidebarOpen", sidebarOpen);
+        }
     }, [sidebarOpen]);
 
-    // cek mobile
+    // ✅ handle resize
     useEffect(() => {
         const handleResize = () => {
             const mobile = window.innerWidth < 768;
@@ -40,14 +43,8 @@ export function SidebarProvider({ children }) {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    const toggleSidebar = () => {
-        setSidebarOpen(prev => !prev);
-    };
-
-    const toggleMobileSidebar = () => {
-        setIsMobileOpen(prev => !prev);
-    };
-
+    const toggleSidebar = () => setSidebarOpen(prev => !prev);
+    const toggleMobileSidebar = () => setIsMobileOpen(prev => !prev);
     const toggleSubmenu = (menu) => {
         setOpenSubmenu(prev => (prev === menu ? null : menu));
     };
@@ -60,6 +57,7 @@ export function SidebarProvider({ children }) {
                 isHovered,
                 activeItem,
                 openSubmenu,
+                isMobile,
                 toggleSidebar,
                 toggleMobileSidebar,
                 setIsHovered,
@@ -73,4 +71,13 @@ export function SidebarProvider({ children }) {
     );
 }
 
-export const useSidebar = () => useContext(SidebarContext);
+// ✅ hook aman
+export const useSidebar = () => {
+    const context = useContext(SidebarContext);
+
+    if (!context) {
+        throw new Error("useSidebar harus dipakai di dalam SidebarProvider");
+    }
+
+    return context;
+};

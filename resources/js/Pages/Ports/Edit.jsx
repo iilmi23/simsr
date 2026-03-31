@@ -1,11 +1,12 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Link, useForm } from "@inertiajs/react";
+import { ChevronRightIcon } from "@heroicons/react/24/outline";
 
 export default function Edit({ customer, port }) {
 
     const { data, setData, put, processing, errors } = useForm({
         name: port.name,
-        description: port.description || ""
+        keterangan: port.keterangan || ""
     });
 
     const submit = (e) => {
@@ -16,64 +17,94 @@ export default function Edit({ customer, port }) {
     return (
         <AdminLayout>
 
-            <div className="min-h-screen bg-gray-50/40 pt-2 pb-8 px-5 md:px-8">
+            <div className="min-h-screen bg-gray-50/40 pt-2 pb-8 px-5 md:px-8 font-sans">
 
-                <div className="bg-white rounded-2xl border shadow-sm max-w-2xl">
+                {/* Breadcrumb */}
+                <div className="flex items-center gap-2 mb-4 text-sm">
+                    <Link href="/customers" className="text-gray-600 hover:text-[#1D6F42] transition-colors">
+                        Customers
+                    </Link>
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                    <Link
+                        href={`/customers/${customer.id}/ports`}
+                        className="text-gray-600 hover:text-[#1D6F42] transition-colors"
+                    >
+                        Ports
+                    </Link>
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-800 font-medium">Edit</span>
+                </div>
 
-                    <div className="p-6 pb-3">
-                        <h1 className="text-2xl font-semibold">
+                {/* Card - Full Width */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+
+                    {/* Header */}
+                    <div className="p-6 pb-4 border-b border-gray-100">
+                        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
                             Edit Port
                         </h1>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Update port details for {customer.name}.
+                        </p>
                     </div>
 
-                    <form onSubmit={submit} className="px-6 pb-6 space-y-5">
+                    {/* Form */}
+                    <div className="p-6">
+                        <form onSubmit={submit} className="space-y-6">
 
-                        <div>
-                            <label className="text-sm font-semibold">Port Name *</label>
+                            {/* Port Name */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                    Port Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.name}
+                                    onChange={(e) => setData("name", e.target.value)}
+                                    placeholder="Enter port name"
+                                    className={`w-full h-11 px-4 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42] ${
+                                        errors.name ? "border-red-400" : "border-gray-200"
+                                    }`}
+                                    autoFocus
+                                />
+                                {errors.name && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+                                )}
+                            </div>
 
-                            <input
-                                value={data.name}
-                                onChange={(e) => setData("name", e.target.value)}
-                                className="w-full h-11 px-3 border rounded-xl mt-1"
-                            />
+                            {/* Description */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                    Description
+                                </label>
+                                <textarea
+                                    rows="4"
+                                    value={data.keterangan}
+                                    onChange={(e) => setData("keterangan", e.target.value)}
+                                    placeholder="Enter description"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
+                                />
+                            </div>
 
-                            {errors.name && (
-                                <p className="text-red-500 text-sm">{errors.name}</p>
-                            )}
+                            {/* Buttons */}
+                            <div className="flex justify-end gap-3 pt-2">
+                                <Link
+                                    href={`/customers/${customer.id}/ports`}
+                                    className="inline-flex items-center justify-center h-11 px-5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition"
+                                >
+                                    Back
+                                </Link>
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="inline-flex items-center justify-center h-11 px-5 bg-[#1D6F42] text-white text-sm font-medium rounded-xl hover:bg-[#185c38] transition disabled:opacity-50"
+                                >
+                                    {processing ? "Updating..." : "Update Port"}
+                                </button>
+                            </div>
 
-                        </div>
-
-                        <div>
-                            <label className="text-sm font-semibold">Description</label>
-
-                            <textarea
-                                rows="4"
-                                value={data.description}
-                                onChange={(e) => setData("description", e.target.value)}
-                                className="w-full border rounded-xl mt-1 p-2"
-                            />
-
-                        </div>
-
-                        <div className="flex justify-end gap-3">
-
-                            <Link
-                                href={`/customers/${customer.id}/ports`}
-                                className="border px-5 h-11 flex items-center rounded-xl"
-                            >
-                                Back
-                            </Link>
-
-                            <button
-                                disabled={processing}
-                                className="bg-[#1D6F42] text-white px-5 h-11 rounded-xl"
-                            >
-                                Update Port
-                            </button>
-
-                        </div>
-
-                    </form>
+                        </form>
+                    </div>
 
                 </div>
 

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Customer extends Model
 {
     //
-    protected $fillable = ['name', 'code', 'Keterangan'];
+    protected $fillable = ['name', 'code', 'keterangan'];
 
     public function ports()
     {

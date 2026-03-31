@@ -19,6 +19,15 @@ class PortController extends Controller
         ]);
     }
 
+    public function all()
+    {
+        $customers = Customer::withCount('ports')->orderBy('name')->get();
+
+        return Inertia::render('Ports/All', [
+            'customers' => $customers,
+        ]);
+    }
+
     public function create(Customer $customer)
     {
         return Inertia::render('Ports/Create', [
@@ -30,10 +39,13 @@ class PortController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string'
+            'keterangan' => 'nullable|string'
         ]);
 
-        $customer->ports()->create($validated);
+        $customer->ports()->create([
+            'name' => $validated['name'],
+            'keterangan' => $validated['keterangan'] ?? null,
+        ]);
 
         return redirect()
             ->route('customers.ports.index', $customer->id)
@@ -52,10 +64,13 @@ class PortController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string'
+            'keterangan' => 'nullable|string'
         ]);
 
-        $port->update($validated);
+        $port->update([
+            'name' => $validated['name'],
+            'keterangan' => $validated['keterangan'] ?? null,
+        ]);
 
         return redirect()
             ->route('customers.ports.index', $customer->id)
