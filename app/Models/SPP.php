@@ -10,7 +10,6 @@ class SPP extends Model
 
     protected $fillable = [
         'customer',
-        'sr_number',
         'part_number',
         'model',
         'family',

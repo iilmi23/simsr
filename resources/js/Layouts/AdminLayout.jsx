@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import Sidebar from '@/Components/Admin/Sidebar';
 import Topbar from '@/Components/Admin/Topbar';
 
@@ -8,13 +8,65 @@ const SIDEBAR_EXPANDED_W  = 240; // px — saat sidebarOpen = true
 const SIDEBAR_COLLAPSED_W = 68;  // px — saat sidebarOpen = false
 
 export default function AdminLayout({ title, children }) {
+    const { url } = usePage();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const getTitleFromUrl = (url) => {
+        if (!url) {
+            return null;
+        }
+
+        const path = url.split('?')[0];
+
+        if (path === '/dashboard') {
+            return 'Dashboard';
+        }
+        if (path.startsWith('/sr/upload')) {
+            return 'Upload SR';
+        }
+        if (path.includes('/ports')) {
+            return 'Ports';
+        }
+        if (path.startsWith('/ports')) {
+            return 'Ports';
+        }
+        if (path.startsWith('/customers')) {
+            return 'Customers';
+        }
+        if (path.startsWith('/carline')) {
+            return 'Car Line';
+        }
+        if (path.startsWith('/summary')) {
+            return 'Summary';
+        }
+        if (path.startsWith('/spp')) {
+            return 'SPP';
+        }
+        if (path.startsWith('/history')) {
+            return 'History';
+        }
+        if (path.startsWith('/settings')) {
+            return 'Settings';
+        }
+        if (path.startsWith('/profile')) {
+            return 'Profile';
+        }
+
+        return null;
+    };
+
+    const pageTitle = title || getTitleFromUrl(url);
+    const headTitle = pageTitle ? `${pageTitle} | SIMSR` : 'SIMSR';
 
     const offset = sidebarOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
 
     return (
         <>
-            <Head title={title ? `${title} | SIMSR` : 'SIMSR'} />
+            <Head>
+                <title>{headTitle}</title>
+                <link rel="icon" type="image/png" sizes="32x32" href="/images/logo.png" />
+                <link rel="shortcut icon" type="image/png" href="/images/logo.png" />
+            </Head>
 
             <div className="min-h-screen bg-gray-50 flex">
 

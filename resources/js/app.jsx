@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
 const appName = import.meta.env.VITE_APP_NAME || 'SIMSR';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => title,
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,
@@ -49,12 +49,16 @@ const ROUTES = {
     'sr.preview': '/preview',
     'sr.upload': '/sr/upload',
     'summary.index': '/summary',
+    'summary.exportAll': '/summary/export',
     'summary.show': '/summary/{id}',
+    'summary.data': '/summary/{id}/data',
     'summary.export': '/summary/{id}/export',
+    'summary.destroy': '/summary/{id}',
     spp: '/spp',
     'spp.show': '/spp/{period}',
     history: '/history',
     settings: '/settings',
+    'debug.logs': '/debug/logs',
     'profile.edit': '/profile',
     'profile.update': '/profile',
     'profile.destroy': '/profile',
@@ -70,8 +74,13 @@ const ROUTES = {
     'password.confirm': '/confirm-password',
     'password.update': '/password',
     logout: '/logout',
-    'storage.local': '/storage/{path}',
-    'storage.local.upload': '/storage/{path}',
+    'users.index': '/admin/users',
+    'users.create': '/admin/users/create',
+    'users.store': '/admin/users',
+    'users.show': '/admin/users/{user}',
+    'users.edit': '/admin/users/{user}/edit',
+    'users.update': '/admin/users/{user}',
+    'users.destroy': '/admin/users/{user}',
 };
 
 const routeHelper = (name, params = {}, absolute = false) => {

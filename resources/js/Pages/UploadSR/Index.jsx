@@ -2,7 +2,6 @@ import AdminLayout from "@/Layouts/AdminLayout";
 import { usePage, router } from "@inertiajs/react";
 import { useEffect, useState, useRef } from "react";
 import * as XLSX from "xlsx";
-import axios from "axios";
 import ExcelPreview from "@/Components/ExcelPreview";
 
 import {
@@ -13,7 +12,6 @@ import {
     TableCellsIcon,
     UserGroupIcon,
     DocumentTextIcon,
-    EyeIcon,
     CloudArrowUpIcon,
     ChartBarIcon,
     DocumentCheckIcon,
@@ -38,14 +36,11 @@ export default function Index() {
     const [workbook, setWorkbook] = useState(null);
     const [sheets, setSheets] = useState([]);
     const [selectedSheet, setSelectedSheet] = useState("");
-    const [previewSummary, setPreviewSummary] = useState(null);
-    const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [zoom, setZoom] = useState(100);
     const [showGridlines, setShowGridlines] = useState(true);
     const [fullscreen, setFullscreen] = useState(false);
 
     const [loading, setLoading] = useState(false);
-    const [previewLoading, setPreviewLoading] = useState(false);
     const containerRef = useRef(null);
 
     const selectedCustomerData = customers.find((c) => String(c.id) === String(selectedCustomer));
@@ -64,7 +59,6 @@ export default function Index() {
         const uploadedFile = e.target.files[0];
         setFile(uploadedFile);
         setFileName(uploadedFile?.name || "");
-        setPreviewSummary(null);
         setSheets([]);
         setSelectedSheet("");
 
@@ -89,46 +83,13 @@ export default function Index() {
     };
 
     const handleSheetChange = (e) => {
-        const sheetIndex = parseInt(e.target.value);
-        const sheetName = sheets[sheetIndex];
+        const sheetValue = e.target.value;
+        const sheetIndex = sheetValue === '' ? '' : parseInt(sheetValue, 10);
         setSelectedSheet(sheetIndex);
     };
 
-    const handlePreviewMapping = async () => {
-        if (!selectedCustomer || !file || selectedSheet === "") {
-            alert("Please complete all fields (Customer, File, and Sheet)");
-            return;
-        }
-
-        setPreviewLoading(true);
-
-        const formData = new FormData();
-        formData.append("customer", selectedCustomer);
-        formData.append("port", selectedPort);
-        formData.append("file", file);
-        formData.append("sheet", selectedSheet);
-
-        try {
-            const response = await axios.post(route("sr.preview"), formData, {
-                headers: { "Content-Type": "multipart/form-data" }
-            });
-
-            if (response.data.success) {
-                setPreviewSummary(response.data.data);
-                setShowPreviewModal(true);
-            } else {
-                alert("Preview failed: " + (response.data.error || "Unknown error"));
-            }
-        } catch (error) {
-            console.error("Preview error:", error);
-            alert("Preview error: " + (error.response?.data?.error || error.message));
-        } finally {
-            setPreviewLoading(false);
-        }
-    };
-
     const handleSubmit = () => {
-        if (!selectedCustomer || !srNumber || !file || selectedSheet === "") {
+        if (!selectedCustomer || !file || selectedSheet === "" || Number.isNaN(selectedSheet)) {
             alert("Please complete all fields including sheet");
             return;
         }
@@ -136,7 +97,6 @@ export default function Index() {
         const formData = new FormData();
         formData.append("customer", selectedCustomer);
         formData.append("port", selectedPort);
-        formData.append("sr_number", srNumber);
         formData.append("file", file);
         formData.append("sheet", selectedSheet);
 
@@ -155,8 +115,6 @@ export default function Index() {
                 setWorkbook(null);
                 setSheets([]);
                 setSelectedSheet("");
-                setPreviewSummary(null);
-                setShowPreviewModal(false);
             },
 
             onError: (err) => {
@@ -300,12 +258,12 @@ export default function Index() {
                                                 ))}
                                             </select>
                                             {requiresPort && !selectedPort && (
-                                                <p className="text-xs text-red-600 mt-2">Port harus dipilih untuk customer ini.</p>
+                                                <p className="text-xs text-red-600 mt-2">Port is required for this customer.</p>
                                             )}
                                         </div>
                                     )}
 
-                                    <div>
+                                    {/* <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1.5">
                                             <div className="flex items-center gap-2">
                                                 <DocumentTextIcon className="w-4 h-4 text-gray-400" />
@@ -319,7 +277,7 @@ export default function Index() {
                                             onChange={(e) => setSrNumber(e.target.value)}
                                             className="w-full h-11 px-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1D6F42] focus:border-[#1D6F42] transition-all duration-200 text-gray-700"
                                         />
-                                    </div>
+                                    </div> */}
                                 </div>
 
                                 <div className="space-y-5">
@@ -377,27 +335,7 @@ export default function Index() {
 
                             {/* ACTION BUTTONS */}
                             <div className="mt-8 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={handlePreviewMapping}
-                                    disabled={previewLoading || !selectedCustomer || !file || selectedSheet === ""}
-                                    className="px-6 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm flex items-center gap-2"
-                                >
-                                    {previewLoading ? (
-                                        <>
-                                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                            <span>Mapping...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <EyeIcon className="w-5 h-5" />
-                                            <span>Preview Mapping Result</span>
-                                        </>
-                                    )}
-                                </button>
+
 
                                 <button
                                     type="button"
@@ -424,7 +362,7 @@ export default function Index() {
                         </div>
 
                         {/* EXCEL PREVIEW SECTION */}
-                        {selectedSheet !== "" && workbook && (
+                        {selectedSheet !== "" && !Number.isNaN(selectedSheet) && workbook && (
                             <div className="animate-fadeIn">
                                 <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-3">
                                     <div className="flex items-center gap-3">
@@ -490,13 +428,6 @@ export default function Index() {
                 </div>
             </div>
 
-            {/* PREVIEW MAPPING MODAL - Same as before */}
-            {showPreviewModal && previewSummary && (
-                // ... modal content (same as previous)
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    {/* ... modal content ... */}
-                </div>
-            )}
         </AdminLayout>
     );
 }

@@ -166,21 +166,14 @@ export default function Login({ status }) {
                                 {processing ? 'Logging in...' : 'Login'}
                             </button>
 
-                            {/* REGISTER LINK */}
-                            <p className="text-center text-sm text-gray-600 mt-4">
-                                Don't have an account?{' '}
-                                <Link
-                                    href={route('register')}
-                                    className="text-[#1D6F42] hover:text-[#166035] font-semibold hover:underline"
-                                >
-                                    Register here
-                                </Link>
-                            </p>
+                            {/* <p className="text-center text-sm text-gray-600 mt-4">
+                                Pendaftaran tidak tersedia secara umum. Silakan minta akun ke admin PPC jika Anda belum punya akses.
+                            </p> */}
                         </form>
 
                         {/* FOOTER */}
                         {/* <p className="text-center text-xs text-gray-500 mt-6">
-                            SIMSR • PT Jatim Autocomp Indonesia
+                            2026 - PT Jatim Autocomp Indonesia | All Rights Reserved
                         </p> */}
 
                     </div>

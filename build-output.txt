@@ -1,0 +1,59 @@
+
+> build
+> vite build
+
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 1362 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mpublic/build/[22m[32mmanifest.json                                    [39m[1m[2m 14.81 kB[22m[1m[22m[2m │ gzip:   1.69 kB[22m
+[2mpublic/build/[22m[35massets/app-B19WnQ71.css                          [39m[1m[2m 53.50 kB[22m[1m[22m[2m │ gzip:   9.33 kB[22m
+[2mpublic/build/[22m[36massets/XMarkIcon-CJZmLQ0z.js                     [39m[1m[2m  0.47 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mpublic/build/[22m[36massets/ChevronRightIcon-DwAfKfkq.js              [39m[1m[2m  0.48 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mpublic/build/[22m[36massets/PrimaryButton-DQTXV0Hf.js                 [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:   0.34 kB[22m
+[2mpublic/build/[22m[36massets/CheckCircleIcon-JpCp68YY.js               [39m[1m[2m  0.52 kB[22m[1m[22m[2m │ gzip:   0.38 kB[22m
+[2mpublic/build/[22m[36massets/MagnifyingGlassIcon-nAjze_U-.js           [39m[1m[2m  0.53 kB[22m[1m[22m[2m │ gzip:   0.37 kB[22m
+[2mpublic/build/[22m[36massets/ArrowDownTrayIcon-CwODbIrf.js             [39m[1m[2m  0.56 kB[22m[1m[22m[2m │ gzip:   0.39 kB[22m
+[2mpublic/build/[22m[36massets/TextInput-WIenkfb_.js                     [39m[1m[2m  0.71 kB[22m[1m[22m[2m │ gzip:   0.42 kB[22m
+[2mpublic/build/[22m[36massets/TrashIcon-C1xKc1_4.js                     [39m[1m[2m  0.87 kB[22m[1m[22m[2m │ gzip:   0.55 kB[22m
+[2mpublic/build/[22m[36massets/ArrowUpIcon-DOQ8f7ZB.js                   [39m[1m[2m  0.93 kB[22m[1m[22m[2m │ gzip:   0.40 kB[22m
+[2mpublic/build/[22m[36massets/UserGroupIcon-C3pzmst6.js                 [39m[1m[2m  0.96 kB[22m[1m[22m[2m │ gzip:   0.57 kB[22m
+[2mpublic/build/[22m[36massets/PlusIcon-BRrZONy2.js                      [39m[1m[2m  1.05 kB[22m[1m[22m[2m │ gzip:   0.47 kB[22m
+[2mpublic/build/[22m[36massets/Edit-DyUMXpSF.js                          [39m[1m[2m  1.05 kB[22m[1m[22m[2m │ gzip:   0.49 kB[22m
+[2mpublic/build/[22m[36massets/FunnelIcon-Dc7avY8g.js                    [39m[1m[2m  1.21 kB[22m[1m[22m[2m │ gzip:   0.54 kB[22m
+[2mpublic/build/[22m[36massets/Logs-DgUl9J0Z.js                          [39m[1m[2m  1.86 kB[22m[1m[22m[2m │ gzip:   0.83 kB[22m
+[2mpublic/build/[22m[36massets/UpdateProfileInformationForm-D2Qm04zD.js  [39m[1m[2m  2.25 kB[22m[1m[22m[2m │ gzip:   0.98 kB[22m
+[2mpublic/build/[22m[36massets/UpdatePasswordForm-DKz2W5Fx.js            [39m[1m[2m  2.30 kB[22m[1m[22m[2m │ gzip:   0.85 kB[22m
+[2mpublic/build/[22m[36massets/Create-ubA6nQ6D.js                        [39m[1m[2m  2.45 kB[22m[1m[22m[2m │ gzip:   0.94 kB[22m
+[2mpublic/build/[22m[36massets/Edit-DkhvICVo.js                          [39m[1m[2m  2.95 kB[22m[1m[22m[2m │ gzip:   1.08 kB[22m
+[2mpublic/build/[22m[36massets/Create-2-58W5aW.js                        [39m[1m[2m  3.25 kB[22m[1m[22m[2m │ gzip:   1.06 kB[22m
+[2mpublic/build/[22m[36massets/Edit-CkxR8roW.js                          [39m[1m[2m  3.31 kB[22m[1m[22m[2m │ gzip:   1.10 kB[22m
+[2mpublic/build/[22m[36massets/Show-4JQeDEdo.js                          [39m[1m[2m  4.27 kB[22m[1m[22m[2m │ gzip:   1.22 kB[22m
+[2mpublic/build/[22m[36massets/Index-uVP7cTp-.js                         [39m[1m[2m  4.65 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mpublic/build/[22m[36massets/ForgotPassword-D3L4REv-.js                [39m[1m[2m  4.68 kB[22m[1m[22m[2m │ gzip:   1.81 kB[22m
+[2mpublic/build/[22m[36massets/SPP-Dz8XMTb1.js                           [39m[1m[2m  4.89 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mpublic/build/[22m[36massets/Index-BrHTaOYj.js                         [39m[1m[2m  5.29 kB[22m[1m[22m[2m │ gzip:   1.61 kB[22m
+[2mpublic/build/[22m[36massets/Login-BnbV7axB.js                         [39m[1m[2m  5.88 kB[22m[1m[22m[2m │ gzip:   2.04 kB[22m
+[2mpublic/build/[22m[36massets/Show-HZpKt81N.js                          [39m[1m[2m  5.91 kB[22m[1m[22m[2m │ gzip:   1.58 kB[22m
+[2mpublic/build/[22m[36massets/VerifyEmail-Cn3Zw3ul.js                   [39m[1m[2m  6.09 kB[22m[1m[22m[2m │ gzip:   2.10 kB[22m
+[2mpublic/build/[22m[36massets/Create-HXWzhhxl.js                        [39m[1m[2m  6.25 kB[22m[1m[22m[2m │ gzip:   1.60 kB[22m
+[2mpublic/build/[22m[36massets/Edit-BI54Myb0.js                          [39m[1m[2m  6.34 kB[22m[1m[22m[2m │ gzip:   1.66 kB[22m
+[2mpublic/build/[22m[36massets/Dashboard-C3G10Uyi.js                     [39m[1m[2m  6.59 kB[22m[1m[22m[2m │ gzip:   1.71 kB[22m
+[2mpublic/build/[22m[36massets/ConfirmPassword-BDaGGq_b.js               [39m[1m[2m  6.96 kB[22m[1m[22m[2m │ gzip:   2.38 kB[22m
+[2mpublic/build/[22m[36massets/index-ykPcq6hJ.js                         [39m[1m[2m  7.83 kB[22m[1m[22m[2m │ gzip:   3.15 kB[22m
+[2mpublic/build/[22m[36massets/Index-gPmVUoFZ.js                         [39m[1m[2m  8.36 kB[22m[1m[22m[2m │ gzip:   2.59 kB[22m
+[2mpublic/build/[22m[36massets/Register-MkH1xgTn.js                      [39m[1m[2m  8.72 kB[22m[1m[22m[2m │ gzip:   2.04 kB[22m
+[2mpublic/build/[22m[36massets/AuthenticatedLayout-DAd2BWhW.js           [39m[1m[2m  8.85 kB[22m[1m[22m[2m │ gzip:   3.18 kB[22m
+[2mpublic/build/[22m[36massets/Index-CqcBWclb.js                         [39m[1m[2m  9.12 kB[22m[1m[22m[2m │ gzip:   2.65 kB[22m
+[2mpublic/build/[22m[36massets/ResetPassword-DFZDrxjC.js                 [39m[1m[2m  9.14 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mpublic/build/[22m[36massets/All-CLQNWPgM.js                           [39m[1m[2m  9.89 kB[22m[1m[22m[2m │ gzip:   2.98 kB[22m
+[2mpublic/build/[22m[36massets/Index-CEQ2cIsF.js                         [39m[1m[2m 10.06 kB[22m[1m[22m[2m │ gzip:   2.82 kB[22m
+[2mpublic/build/[22m[36massets/Show-DtUq_pcC.js                          [39m[1m[2m 11.93 kB[22m[1m[22m[2m │ gzip:   3.09 kB[22m
+[2mpublic/build/[22m[36massets/transition-DAIIcVpI.js                    [39m[1m[2m 14.62 kB[22m[1m[22m[2m │ gzip:   5.83 kB[22m
+[2mpublic/build/[22m[36massets/AdminLayout-CUCV5Fdk.js                   [39m[1m[2m 18.39 kB[22m[1m[22m[2m │ gzip:   5.40 kB[22m
+[2mpublic/build/[22m[36massets/Welcome-CrUFA88w.js                       [39m[1m[2m 19.23 kB[22m[1m[22m[2m │ gzip:   5.82 kB[22m
+[2mpublic/build/[22m[36massets/DeleteUserForm-DWaE0DIQ.js                [39m[1m[2m 33.51 kB[22m[1m[22m[2m │ gzip:  12.08 kB[22m
+[2mpublic/build/[22m[36massets/app-DeyQ553A.js                           [39m[1m[2m342.48 kB[22m[1m[22m[2m │ gzip: 114.31 kB[22m
+[2mpublic/build/[22m[36massets/Index-B9SoM6y6.js                         [39m[1m[2m353.40 kB[22m[1m[22m[2m │ gzip: 119.71 kB[22m
+[32m✓ built in 10.06s[39m

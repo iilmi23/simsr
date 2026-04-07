@@ -186,7 +186,6 @@ class ExcelReader
                 
                 $result[] = [
                     'customer' => $this->config['customer_code'],
-                    'sr_number' => null,
                     'source_file' => null,
                     'part_number' => $partNumber,
                     'qty' => $qty,

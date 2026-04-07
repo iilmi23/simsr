@@ -17,7 +17,7 @@ use Carbon\Carbon;
  *     → kolom sebelum anchor = data historis lama, di-skip
  *   - Tahun direkonstruksi dari urutan increment bulan (jika bulan mundur → tahun +1)
  *   - Kolom 2W/3W/4W/5W mewarisi bulan+type dari anchor 1W di sebelah kirinya
- *   - Tanggal ETA aktual diambil dari row 18 (ETA TYC), lalu tahunnya dikoreksi
+ *   - Tanggal ETA aktual diambil dari row 18 (ETA PORT KAO) dan ETD aktual diambil dari row ETD PORT SUR
  */
 class TYCMapper implements SRMapperInterface
 {
@@ -26,7 +26,7 @@ class TYCMapper implements SRMapperInterface
     private const ETA_TYC_ROW       = 17; // row 18 Excel = index 17
     private const HEADER_ROW        = 18; // row 19 Excel = index 18
 
-    public function map(array $sheet, ?Carbon $referenceDate = null): array
+    public function map(array $sheet, ?Carbon $referenceDate = null, array $options = []): array
     {
         $result = [];
 
@@ -39,11 +39,17 @@ class TYCMapper implements SRMapperInterface
         [$headerRow, $headerRowIndex] = $this->detectHeaderRow($sheet) ?? [$sheet[self::HEADER_ROW] ?? [], self::HEADER_ROW];
         [$firmForecastRow, $firmForecastRowIndex] = $this->detectFirmForecastRow($sheet, 0, $headerRowIndex) ?? [$sheet[self::FIRM_FORECAST_ROW] ?? [], self::FIRM_FORECAST_ROW];
         [$timeChartRow, $timeChartRowIndex] = $this->detectTimeChartRow($sheet, 0, $headerRowIndex) ?? [$sheet[self::TIME_CHART_ROW] ?? [], self::TIME_CHART_ROW];
-        [$etaTycRow, $etaTycRowIndex] = $this->detectEtaTycRow($sheet, $timeChartRowIndex + 1, $headerRowIndex) ?? [$sheet[self::ETA_TYC_ROW] ?? [], self::ETA_TYC_ROW];
+        [$etaRow, $etaRowIndex] = $this->detectEtaPortKaoRow($sheet, $timeChartRowIndex + 1, $headerRowIndex)
+            ?? $this->detectEtaTycRow($sheet, $timeChartRowIndex + 1, $headerRowIndex)
+            ?? [$sheet[self::ETA_TYC_ROW] ?? [], self::ETA_TYC_ROW];
 
-        $sheetReference = $referenceDate ?? $this->guessReferenceDate($etaTycRow, $timeChartRow) ?? Carbon::now();
+        [$etdRow, $etdRowIndex] = $this->detectEtdPortSurRow($sheet, $timeChartRowIndex + 1, $headerRowIndex)
+            ?? $this->detectDateRowBefore($sheet, $etaRowIndex - 1, $timeChartRowIndex + 1)
+            ?? [[], -1];
 
-        Log::info("Detected rows: HEADER={$headerRowIndex}, FIRM_FORECAST={$firmForecastRowIndex}, TIME_CHART={$timeChartRowIndex}, ETA_TYC={$etaTycRowIndex}");
+        $sheetReference = $referenceDate ?? $this->guessReferenceDate($etaRow, $timeChartRow) ?? Carbon::now();
+
+        Log::info("Detected rows: HEADER={$headerRowIndex}, FIRM_FORECAST={$firmForecastRowIndex}, TIME_CHART={$timeChartRowIndex}, ETA={$etaRowIndex}, ETD={$etdRowIndex}");
         Log::info("Reference date used for window: {$sheetReference->toDateString()}");
 
         $ref = $sheetReference;
@@ -69,21 +75,26 @@ class TYCMapper implements SRMapperInterface
             throw new \Exception("Kolom 'PRODUCT NO' tidak ditemukan");
         }
 
+        $hiddenColumns = array_flip($options['hidden_columns'] ?? []);
+        $hiddenRows = array_flip($options['hidden_rows'] ?? []);
+
         // Cari DATA_COL_START dari anchor tahun eksplisit
-        $dataColStart = $this->findDataColStart($timeChartRow, $etaTycRow);
+        $dataColStart = $this->findDataColStart($timeChartRow, $etaRow, $etdRow, $hiddenColumns);
         Log::info("DATA_COL_START: {$dataColStart}");
 
         // Bangun peta kolom (semua minggu 1W~5W)
         $dateColumns = $this->buildDateColumns(
             $firmForecastRow,
             $timeChartRow,
-            $etaTycRow,
+            $etaRow,
+            $etdRow,
             $headerRow,
             $dataColStart,
             $firmStart,
             $firmEnd,
             $forecastStart,
-            $forecastEnd
+            $forecastEnd,
+            $hiddenColumns
         );
 
         if (empty($dateColumns)) {
@@ -100,7 +111,7 @@ class TYCMapper implements SRMapperInterface
             " (FIRM=" . count($firmCols) . ", FORECAST=" . count($forecastCols) . ")");
 
         // Cari baris data pertama
-        $dataStartRow = $this->findDataStartRow($sheet, $headerRowIndex, $partCol, $qtyLabelCol, $dateColumns);
+        $dataStartRow = $this->findDataStartRow($sheet, $headerRowIndex, $partCol, $qtyLabelCol, $dateColumns, $hiddenRows);
         if ($dataStartRow === null) {
             throw new \Exception("Baris data tidak ditemukan setelah header");
         }
@@ -108,8 +119,14 @@ class TYCMapper implements SRMapperInterface
         // Loop data rows
         $skipWords     = ['total', 'subtotal', 'grand total', 'balance'];
         $processedRows = 0;
+        $lastModel     = null;
+        $lastFamily    = null;
 
         for ($i = $dataStartRow; $i < count($sheet); $i++) {
+            if (isset($hiddenRows[$i])) {
+                continue;
+            }
+
             $row = $sheet[$i];
             if (!is_array($row)) continue;
 
@@ -121,6 +138,19 @@ class TYCMapper implements SRMapperInterface
 
             $model  = trim((string)($row[$modelCol] ?? '')) ?: null;
             $family = trim((string)($row[$familyCol] ?? '')) ?: null;
+            if ($model === null) {
+                $model = $lastModel;
+            }
+            if ($family === null) {
+                $family = $lastFamily;
+            }
+            if ($model !== null) {
+                $lastModel = $model;
+            }
+            if ($family !== null) {
+                $lastFamily = $family;
+            }
+
             $no     = $row[$noCol] ?? null;
             $sfx    = trim((string)($row[$sfxCol] ?? '')) ?: null;
 
@@ -139,7 +169,6 @@ class TYCMapper implements SRMapperInterface
 
                 $result[] = [
                     'customer'      => 'TYC',
-                    'sr_number'     => null,
                     'source_file'   => null,
                     'part_number'   => $partNumber,
                     'qty'           => $qty,
@@ -184,17 +213,24 @@ class TYCMapper implements SRMapperInterface
      * Kolom sebelumnya = data historis lama → di-skip.
      * Fallback = 7 jika tidak ada anchor.
      */
-    private function findDataColStart(array $timeChartRow, array $etaTycRow): int
+    private function findDataColStart(array $timeChartRow, array $etaRow, array $etdRow, array $hiddenColumns = []): int
     {
         foreach ($timeChartRow as $i => $val) {
-            if ($i < 7) continue;
+            if ($i < 7 || isset($hiddenColumns[$i])) continue;
             if (preg_match('/^\d{4}[\/\-]\d{1,2}$/', trim((string)$val))) {
                 return $i;
             }
         }
 
-        foreach ($etaTycRow as $i => $val) {
-            if ($i < 7) continue;
+        foreach ($etaRow as $i => $val) {
+            if ($i < 7 || isset($hiddenColumns[$i])) continue;
+            if ($this->parseDateValue($val) !== null) {
+                return $i;
+            }
+        }
+
+        foreach ($etdRow as $i => $val) {
+            if ($i < 7 || isset($hiddenColumns[$i])) continue;
             if ($this->parseDateValue($val) !== null) {
                 return $i;
             }
@@ -203,9 +239,13 @@ class TYCMapper implements SRMapperInterface
         return 7;
     }
 
-    private function findDataStartRow(array $sheet, int $headerRowIndex, int $partCol, int $qtyLabelCol, array $dateColumns): ?int
+    private function findDataStartRow(array $sheet, int $headerRowIndex, int $partCol, int $qtyLabelCol, array $dateColumns, array $hiddenRows = []): ?int
     {
         for ($i = $headerRowIndex + 1; $i < count($sheet); $i++) {
+            if (isset($hiddenRows[$i])) {
+                continue;
+            }
+
             $row = $sheet[$i];
             if (!is_array($row)) {
                 continue;
@@ -263,23 +303,25 @@ class TYCMapper implements SRMapperInterface
     /**
      * Bangun peta kolom tanggal yang aktif dalam window.
      *
-     * Untuk setiap kolom >= $dataColStart yang punya ETA TYC:
+     * Untuk setiap kolom >= $dataColStart yang punya ETA PORT KAO:
      * 1. Jika kolom punya label bulan di TIME CHART row → update anchor state
      * 2. Kolom 2W/3W/4W/5W mewarisi state (bulan + type) dari anchor sebelumnya
      * 3. Rekonstruksi tahun dari urutan increment bulan
-     * 4. Koreksi tahun ETA TYC
+     * 4. Koreksi tahun ETA PORT KAO / ETD PORT SUR
      * 5. Filter window per type
      */
     private function buildDateColumns(
         array  $firmForecastRow,
         array  $timeChartRow,
-        array  $etaTycRow,
+        array  $etaRow,
+        array  $etdRow,
         array  $headerRow,
         int    $dataColStart,
         Carbon $firmStart,
         Carbon $firmEnd,
         Carbon $forecastStart,
-        Carbon $forecastEnd
+        Carbon $forecastEnd,
+        array  $hiddenColumns = []
     ): array {
         $columns      = [];
         $skipped      = [];
@@ -288,10 +330,14 @@ class TYCMapper implements SRMapperInterface
         $currentMonth = null;
         $currentType  = null;
 
-        $maxCol = max(count($timeChartRow), count($etaTycRow));
+        $maxCol = max(count($timeChartRow), count($etaRow), count($etdRow));
 
         for ($i = $dataColStart; $i < $maxCol; $i++) {
-            $etaRaw  = $etaTycRow[$i] ?? null;
+            if (isset($hiddenColumns[$i])) {
+                continue;
+            }
+
+            $etaRaw  = $etaRow[$i] ?? null;
             if (empty($etaRaw)) continue;
 
             $etaBase = $this->parseDateValue($etaRaw);
@@ -339,14 +385,16 @@ class TYCMapper implements SRMapperInterface
                 'month' => $colMonthStart->format('Y-m'),
             ];
 
-            // Koreksi tahun ETA TYC
-            try {
-                $eta = $etaBase->copy()->year($currentYear);
-            } catch (\Throwable $e) {
-                $eta = $etaBase;
-            }
+            $eta = $this->normalizeDateValueWithYear($etaBase, $etaRaw, $currentYear);
             $info['eta'] = $eta;
-            $info['etd'] = $eta->copy()->subDays(5);
+
+            $etdRaw  = $etdRow[$i] ?? null;
+            $etdBase = $this->parseDateValue($etdRaw);
+            if ($etdBase !== null) {
+                $info['etd'] = $this->normalizeDateValueWithYear($etdBase, $etdRaw, $currentYear);
+            } else {
+                $info['etd'] = $eta->copy()->subDays(5);
+            }
 
             $inWindow = match ($currentType) {
                 'FIRM'     => $colMonthStart->between($firmStart,     $firmEnd),
@@ -380,6 +428,11 @@ class TYCMapper implements SRMapperInterface
         if (preg_match('/^(\d{4})[\/\-](\d{1,2})$/', $s, $m)) {
             $month = (int) $m[2];
             if ($month >= 1 && $month <= 12) return [(int) $m[1], $month];
+        }
+
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})$/', $s, $m)) {
+            $month = (int) $m[1];
+            if ($month >= 1 && $month <= 12) return [null, $month];
         }
 
         if (preg_match('/^\d{1,2}$/', $s)) {
@@ -614,6 +667,117 @@ class TYCMapper implements SRMapperInterface
         }
 
         return null;
+    }
+
+    private function detectEtaPortKaoRow(array $sheet, int $start = 0, int $end = 30): ?array
+    {
+        return $this->detectLabeledDateRow($sheet, ['ETA', 'KAO'], $start, $end);
+    }
+
+    private function detectEtdPortSurRow(array $sheet, int $start = 0, int $end = 30): ?array
+    {
+        return $this->detectLabeledDateRow($sheet, ['ETD', 'SUR'], $start, $end);
+    }
+
+    private function detectDateRowBefore(array $sheet, int $index, int $start = 0): ?array
+    {
+        for ($idx = $index; $idx >= max($start, 0); $idx--) {
+            $row = $sheet[$idx] ?? null;
+            if (!is_array($row)) {
+                continue;
+            }
+
+            if ($this->countDateValues($row) >= 5) {
+                return [$row, $idx];
+            }
+        }
+
+        return null;
+    }
+
+    private function detectLabeledDateRow(array $sheet, array $mustContain, int $start = 0, int $end = 30): ?array
+    {
+        $max = min(count($sheet), $end);
+        $mustContain = array_map(fn($word) => strtoupper($word), $mustContain);
+
+        for ($idx = max($start, 0); $idx < $max; $idx++) {
+            $row = $sheet[$idx];
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $text = strtoupper(implode(' ', array_map(fn($cell) => trim((string)$cell), $row)));
+            $found = true;
+            foreach ($mustContain as $word) {
+                if ($word === '' || str_contains($word, ' ')) {
+                    if (stripos($text, $word) === false) {
+                        $found = false;
+                        break;
+                    }
+                } else {
+                    if (strpos($text, $word) === false) {
+                        $found = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!$found) {
+                continue;
+            }
+
+            if ($this->countDateValues($row) >= 5) {
+                return [$row, $idx];
+            }
+        }
+
+        return null;
+    }
+
+    private function countDateValues(array $row): int
+    {
+        $count = 0;
+        foreach ($row as $cell) {
+            if ($this->parseDateValue($cell) !== null) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    private function normalizeDateValueWithYear(Carbon $date, $rawValue, ?int $year): Carbon
+    {
+        if ($year === null || $this->valueContainsYear($rawValue)) {
+            return $date->copy();
+        }
+
+        try {
+            return $date->copy()->year($year);
+        } catch (\Throwable $e) {
+            return $date->copy();
+        }
+    }
+
+    private function valueContainsYear($value): bool
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return true;
+        }
+
+        if (is_numeric($value)) {
+            return true;
+        }
+
+        $text = trim((string)$value);
+        if (preg_match('/^(\d{4})[\/\-]/', $text)) {
+            return true;
+        }
+        if (preg_match('/\d{4}$/', $text)) {
+            return true;
+        }
+
+        return false;
     }
 
     private function detectEtaTycRow(array $sheet, int $start = 0, int $end = 30): ?array

@@ -10,10 +10,11 @@ class SR extends Model
 
     protected $fillable = [
         'customer',
-        'sr_number',
         'source_file',
+        'upload_batch',
         'part_number',
         'qty',
+        'total',
         'delivery_date',
         'etd',
         'eta',
@@ -33,7 +34,7 @@ class SR extends Model
 
     public function getSummaryData()
     {
-        return self::where('sr_number', $this->sr_number)
+        return self::where('source_file', $this->source_file)
             ->orderBy('delivery_date')
             ->get();
     }

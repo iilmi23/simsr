@@ -1,8 +1,15 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { FaUsers, FaAnchor, FaCheckCircle } from 'react-icons/fa';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 
 export default function Dashboard({ stats, recent_customers, recent_sr, error }) {
+    const user = usePage().props.auth.user;
+    const roleName = {
+        admin: 'Admin',
+        ppc_staff: 'PPC Staff',
+        ppc_supervisor: 'PPC Supervisor',
+        ppc_manager: 'PPC Manager',
+    }[user?.role] ?? 'User';
     // Stats data dari database - hanya 3 card
     const statsData = [
         {
@@ -46,7 +53,7 @@ export default function Dashboard({ stats, recent_customers, recent_sr, error })
                         Dashboard
                     </h1>
                     <p className="text-gray-500 mt-1">
-                        Welcome back! Here's an overview of your data.
+                        Welcome back, {roleName}! Here's an overview of your data.
                     </p>
                 </div>
 
@@ -151,7 +158,7 @@ export default function Dashboard({ stats, recent_customers, recent_sr, error })
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <p className="font-medium text-gray-900">
-                                                    {sr.sr_number || `SR-${sr.id}`}
+                                                    {sr.source_file || `SR-${sr.id}`}
                                                 </p>
                                                 <p className="text-sm text-gray-500">
                                                     Created {new Date(sr.created_at).toLocaleDateString()}

@@ -1,10 +1,17 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { useState, useRef, useEffect } from 'react';
 import { UserCircleIcon } from "@heroicons/react/24/outline";
 
 export default function Topbar({ sidebarOpen, setSidebarOpen }) {
     const [open, setOpen] = useState(false);
     const dropdownRef = useRef();
+    const user = usePage().props.auth.user;
+    const roleLabel = {
+        admin: 'Admin',
+        ppc_staff: 'PPC Staff',
+        ppc_supervisor: 'PPC Supervisor',
+        ppc_manager: 'PPC Manager',
+    }[user?.role] ?? 'User';
 
     useEffect(() => {
         function handleClick(e) {
@@ -36,9 +43,9 @@ export default function Topbar({ sidebarOpen, setSidebarOpen }) {
                     {/* LOGO - ukuran diperbesar & proporsional */}
                     <Link href="/dashboard" className="flex justify-start">
                         <img
-                            src="/images/logo.png"
+                            src="/images/jai.jpg"
                             alt="SIMSR Logo"
-                            className="h-36 w-56"  // 
+                            className="h-11 w-38"  // 
                         />
                     </Link>
 
@@ -65,8 +72,8 @@ export default function Topbar({ sidebarOpen, setSidebarOpen }) {
                             </div>
 
                             <div className="hidden md:flex flex-col items-start">
-                                <span className="text-sm font-semibold text-gray-800">Admin</span>
-                                <span className="text-xs text-gray-500">SIMSR</span>
+                                <span className="text-sm font-semibold text-gray-800">{user?.name ?? 'User'}</span>
+                                <span className="text-xs text-gray-500">{roleLabel}</span>
                             </div>
 
                             <svg
@@ -87,13 +94,13 @@ export default function Topbar({ sidebarOpen, setSidebarOpen }) {
                                 <div className="bg-[#1D6F42] text-white p-5">
                                     <div className="flex items-center gap-3">
                                         <img
-                                            src="https://ui-avatars.com/api/?name=Admin&background=1D6F42&color=fff&size=128"
-                                            alt="Admin"
+                                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name ?? 'User')}&background=1D6F42&color=fff&size=128`}
+                                            alt={user?.name ?? 'User'}
                                             className="w-12 h-12 rounded-full border-2 border-white/30"
                                         />
                                         <div>
-                                            <p className="font-semibold">Admin SIMSR</p>
-                                            <p className="text-xs text-green-100 mt-0.5">admin@simsr.com</p>
+                                            <p className="font-semibold">{user?.name ?? 'User'}</p>
+                                            <p className="text-xs text-green-100 mt-0.5">{user?.email ?? ''}</p>
                                         </div>
                                     </div>
                                 </div>

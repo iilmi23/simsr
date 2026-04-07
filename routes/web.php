@@ -19,6 +19,8 @@ use Inertia\Inertia;
 |--------------------------------------------------------------------------
 */
 
+Route::aliasMiddleware('role', \App\Http\Middleware\EnsureRole::class);
+
 // Redirect root berdasarkan login
 Route::get('/', function () {
     return Auth::check()
@@ -46,48 +48,84 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('dashboard');
 
-    // ===================== SHIPMENTS =====================
-    Route::get('/shipments', function () {
-        return Inertia::render('Admin/Shipments');
-    })->name('shipments');
+    // ===================== PPC & ADMIN PAGES =====================
+    Route::middleware('role:admin,ppc_staff,ppc_supervisor,ppc_manager')->group(function () {
+        Route::get('/sr/upload', [SRController::class, 'uploadPage'])->name('sr.upload.page');
+        Route::post('/preview', [SRController::class, 'preview'])->name('sr.preview');
+        Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])->name('sr.upload');
 
-    // ===================== MASTER CUSTOMER =====================
-    Route::resource('customers', CustomerController::class);
+        Route::get('/summary', [SummaryController::class, 'index'])->name('summary.index');
+        Route::get('/summary/export', [SummaryController::class, 'exportAll'])->name('summary.exportAll');
+        Route::get('/summary/{id}', [SummaryController::class, 'show'])->name('summary.show');
+        Route::get('/summary/{id}/data', [SummaryController::class, 'data'])->name('summary.data');
+        Route::get('/summary/{id}/export', [SummaryController::class, 'export'])->name('summary.export');
+        Route::delete('/summary/{id}', [SummaryController::class, 'destroy'])->name('summary.destroy');
 
-    /*
-    |--------------------------------------------------------------------------
-    | PORTS (Nested Resource)
-    |--------------------------------------------------------------------------
-    */
-    Route::resource('customers.ports', PortController::class);
-    Route::get('/ports', [PortController::class, 'all'])->name('ports.index');
+        Route::get('/spp', [SPPController::class, 'index'])->name('spp');
+        Route::get('/spp/{period}', [SPPController::class, 'show'])->name('spp.show');
 
-    // ===================== MASTER LAIN =====================
-    Route::get('/carline', function () {
-        return Inertia::render('Admin/Masters/CarLine');
-    })->name('carline');
+        Route::get('/history', function () {
+            return Inertia::render('Admin/History');
+        })->name('history');
+    });
 
-    // ===================== SR UPLOAD =====================
-    Route::get('/sr/upload', [SRController::class, 'uploadPage'])->name('sr.upload.page');
-    Route::post('/preview', [SRController::class, 'preview'])->name('sr.preview');
-    Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])->name('sr.upload');
+    // ===================== ADMIN ONLY =====================
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/shipments', function () {
+            return Inertia::render('Admin/Shipments');
+        })->name('shipments');
 
-    // ===================== SUMMARY =====================
-    Route::get('/summary', [SummaryController::class, 'index'])->name('summary.index');
-    Route::get('/summary/{id}', [SummaryController::class, 'show'])->name('summary.show');
-    Route::get('/summary/{id}/export', [SummaryController::class, 'export'])->name('summary.export');
+        Route::resource('customers', CustomerController::class);
 
-    // ===================== SPP =====================
-    Route::get('/spp', [SPPController::class, 'index'])->name('spp');
-    Route::get('/spp/{period}', [SPPController::class, 'show'])->name('spp.show');
+        Route::resource('customers.ports', PortController::class);
+        Route::get('/ports', [PortController::class, 'all'])->name('ports.index');
 
-    Route::get('/history', function () {
-        return Inertia::render('Admin/History');
-    })->name('history');
+        Route::get('/carline', function () {
+            return Inertia::render('Admin/Masters/CarLine');
+        })->name('carline');
 
-    Route::get('/settings', function () {
-        return Inertia::render('Admin/Settings');
-    })->name('settings');
+        Route::get('/settings', function () {
+            return Inertia::render('Admin/Settings');
+        })->name('settings');
+
+        Route::get('/debug/logs', function () {
+            $logFile = storage_path('logs/laravel.log');
+            $logs = [];
+
+            if (file_exists($logFile)) {
+                $lines = array_slice(file($logFile), -50); // Get last 50 lines
+                $logs = array_reverse($lines); // Show newest first
+            }
+
+            return Inertia::render('Admin/Logs', [
+                'logs' => $logs,
+                'logFile' => $logFile
+            ]);
+        })->name('debug.logs');
+
+        // ===================== USER MANAGEMENT =====================
+        Route::prefix('admin')->group(function () {
+            Route::resource('users', \App\Http\Controllers\UserController::class);
+        });
+
+        Route::get('/debug/sr-latest', function () {
+            $latestUploads = \App\Models\SR::orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get(['id', 'customer', 'source_file', 'upload_batch', 'part_number', 'qty', 'created_at']);
+
+            $totalByBatch = \App\Models\SR::selectRaw('upload_batch, COUNT(*) as count, SUM(qty) as total_qty, MAX(created_at) as latest_upload')
+                ->groupBy('upload_batch')
+                ->orderBy('latest_upload', 'desc')
+                ->limit(5)
+                ->get();
+
+            return response()->json([
+                'latest_records' => $latestUploads,
+                'batches_summary' => $totalByBatch,
+                'total_sr_records' => \App\Models\SR::count()
+            ]);
+        })->name('debug.sr.latest');
+    });
 
     // ===================== PROFILE =====================
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

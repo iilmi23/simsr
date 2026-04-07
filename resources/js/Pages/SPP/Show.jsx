@@ -89,7 +89,6 @@ export default function SPPShow({ customers, filters, period, records, summary }
                                 <thead className="bg-gray-100">
                                     <tr>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">No</th>
-                                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">SR Number</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Customer</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Part Number</th>
                                         <th className="p-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">ETA</th>
@@ -105,7 +104,6 @@ export default function SPPShow({ customers, filters, period, records, summary }
                                         records.map((record, index) => (
                                             <tr key={record.id ?? index} className="border-t border-gray-100">
                                                 <td className="p-3 text-gray-600">{index + 1}</td>
-                                                <td className="p-3 text-gray-900">{record.sr_number}</td>
                                                 <td className="p-3 text-gray-900">{record.customer}</td>
                                                 <td className="p-3 text-gray-900">{record.part_number}</td>
                                                 <td className="p-3 text-right text-gray-900">{record.eta}</td>

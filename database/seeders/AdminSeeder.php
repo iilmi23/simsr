@@ -14,13 +14,14 @@ class AdminSeeder extends Seeder
     public function run(): void
     {
         // Cek apakah admin sudah ada, jika belum buat
-        User::firstOrCreate(
+        User::updateOrCreate(
             ['email' => 'admin@simsr.com'], // Cek berdasarkan email
             [
                 'name' => 'Admin PPC',
                 'email' => 'admin@simsr.com',
                 'password' => Hash::make('jai2026!'),
                 'email_verified_at' => now(), // Langsung verified
+                'role' => 'admin',
             ]
         );
 

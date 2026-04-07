@@ -22,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -45,5 +46,46 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function hasRole(array|string $roles): bool
+    {
+        $currentRole = $this->role ?? 'ppc_staff';
+
+        if (is_array($roles)) {
+            return in_array($currentRole, $roles, true);
+        }
+
+        return $currentRole === $roles;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isPpcStaff(): bool
+    {
+        return $this->role === 'ppc_staff';
+    }
+
+    public function isPpcSupervisor(): bool
+    {
+        return $this->role === 'ppc_supervisor';
+    }
+
+    public function isPpcManager(): bool
+    {
+        return $this->role === 'ppc_manager';
+    }
+
+    public function getRoleLabelAttribute(): string
+    {
+        return match ($this->role) {
+            'admin' => 'Admin',
+            'ppc_supervisor' => 'PPC Supervisor',
+            'ppc_manager' => 'PPC Manager',
+            default => 'PPC Staff',
+        };
     }
 }

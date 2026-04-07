@@ -67,6 +67,12 @@ const Icons = {
                 d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
     ),
+    Users: () => (
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+        </svg>
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -79,13 +85,35 @@ const MENU_SECTIONS = [
     {
         label: 'MENU',
         items: [
-            { name: 'Dashboard', icon: 'Dashboard', route: 'dashboard' },
             {
-                name: 'Master Data', icon: 'Master',
+                name: 'Dashboard',
+                icon: 'Dashboard',
+                route: 'dashboard',
+                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+            },
+            {
+                name: 'Master Data',
+                icon: 'Master',
+                roles: ['admin'],
                 submenu: [
-                    { name: 'Customers', icon: 'Customers', route: 'customers.index' },
-                    { name: 'Ports', icon: 'Ports', route: 'ports.index' },
-                    { name: 'Car Line', icon: 'CarLine', route: 'carline' },
+                    {
+                        name: 'Customers',
+                        icon: 'Customers',
+                        route: 'customers.index',
+                        roles: ['admin'],
+                    },
+                    {
+                        name: 'Ports',
+                        icon: 'Ports',
+                        route: 'ports.index',
+                        roles: ['admin'],
+                    },
+                    {
+                        name: 'Car Line',
+                        icon: 'CarLine',
+                        route: 'carline',
+                        roles: ['admin'],
+                    },
                 ],
             },
         ],
@@ -93,16 +121,53 @@ const MENU_SECTIONS = [
     {
         label: 'SHIPPING RELEASE',
         items: [
-            { name: 'Upload SR', icon: 'UploadSR', route: 'sr.upload.page' },
-            { name: 'Summary', icon: 'Summary', route: 'summary.index' },
-            { name: 'SPP', icon: 'SPP', route: 'spp' },
-            { name: 'History', icon: 'History', route: 'history' },
+            {
+                name: 'Upload SR',
+                icon: 'UploadSR',
+                route: 'sr.upload.page',
+                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+            },
+            {
+                name: 'Summary',
+                icon: 'Summary',
+                route: 'summary.index',
+                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+            },
+            {
+                name: 'SPP',
+                icon: 'SPP',
+                route: 'spp',
+                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+            },
+            {
+                name: 'History',
+                icon: 'History',
+                route: 'history',
+                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+            },
         ],
     },
     {
         label: 'SYSTEM',
         items: [
-            { name: 'Settings', icon: 'Settings', route: 'settings' },
+            {
+                name: 'Users',
+                icon: 'Users',
+                route: 'users.index',
+                roles: ['admin'],
+            },
+            {
+                name: 'Settings',
+                icon: 'Settings',
+                route: 'settings',
+                roles: ['admin'],
+            },
+            {
+                name: 'Debug Logs',
+                icon: 'Bug',
+                route: 'debug.logs',
+                roles: ['admin'],
+            },
         ],
     },
 ];
@@ -149,6 +214,35 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     const [activeMenu, setActiveMenu] = useState('Dashboard');
     const [openSubmenu, setOpenSubmenu] = useState(null);
     const [hovered, setHovered] = useState(null);
+    const user = usePage().props.auth.user;
+    const role = user?.role ?? 'ppc_staff';
+
+    const filterItemsByRole = (items, currentRole) => {
+        return items
+            .map((item) => {
+                const visible = !item.roles || item.roles.includes(currentRole);
+                const submenu = item.submenu
+                    ? filterItemsByRole(item.submenu, currentRole)
+                    : undefined;
+
+                if (!visible && (!submenu || submenu.length === 0)) {
+                    return null;
+                }
+
+                return {
+                    ...item,
+                    submenu,
+                };
+            })
+            .filter(Boolean);
+    };
+
+    const menuSections = MENU_SECTIONS
+        .map((section) => ({
+            ...section,
+            items: filterItemsByRole(section.items, role),
+        }))
+        .filter((section) => section.items.length > 0);
 
     // Helper function untuk mendapatkan route URL dengan error handling
     const getRouteUrl = (routeName, params = {}) => {
@@ -354,15 +448,15 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                 }}>
                     <Link href={getRouteUrl('dashboard')} style={{ display: 'flex', alignItems: 'center' }}>
                         {sidebarOpen
-                            ? <img src="/images/logo.png" alt="SIMSR" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
-                            : <img src="/images/logo.png" alt="SIMSR" style={{ height: 30, width: 30, objectFit: 'contain' }} />
+                            ? <img src="/images/jai.jpg" alt="SIMSR" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+                            : <img src="/images/jai.jpg" alt="SIMSR" style={{ height: 30, width: 30, objectFit: 'contain' }} />
                         }
                     </Link>
                 </div>
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, padding: '16px 8px', overflowX: 'hidden' }}>
-                    {MENU_SECTIONS.map((sec) => (
+                    {menuSections.map((sec) => (
                         <div key={sec.label} style={{ marginBottom: 20 }}>
 
                             {/* Section label */}
