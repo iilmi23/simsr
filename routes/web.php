@@ -19,8 +19,6 @@ use Inertia\Inertia;
 |--------------------------------------------------------------------------
 */
 
-Route::aliasMiddleware('role', \App\Http\Middleware\EnsureRole::class);
-
 // Redirect root berdasarkan login
 Route::get('/', function () {
     return Auth::check()
@@ -49,28 +47,51 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     // ===================== PPC & ADMIN PAGES =====================
-    Route::middleware('role:admin,ppc_staff,ppc_supervisor,ppc_manager')->group(function () {
-        Route::get('/sr/upload', [SRController::class, 'uploadPage'])->name('sr.upload.page');
-        Route::post('/preview', [SRController::class, 'preview'])->name('sr.preview');
-        Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])->name('sr.upload');
+    Route::get('/sr/upload', [SRController::class, 'uploadPage'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('sr.upload.page');
 
-        Route::get('/summary', [SummaryController::class, 'index'])->name('summary.index');
-        Route::get('/summary/export', [SummaryController::class, 'exportAll'])->name('summary.exportAll');
-        Route::get('/summary/{id}', [SummaryController::class, 'show'])->name('summary.show');
-        Route::get('/summary/{id}/data', [SummaryController::class, 'data'])->name('summary.data');
-        Route::get('/summary/{id}/export', [SummaryController::class, 'export'])->name('summary.export');
-        Route::delete('/summary/{id}', [SummaryController::class, 'destroy'])->name('summary.destroy');
+    Route::post('/preview', [SRController::class, 'preview'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('sr.preview');
 
-        Route::get('/spp', [SPPController::class, 'index'])->name('spp');
-        Route::get('/spp/{period}', [SPPController::class, 'show'])->name('spp.show');
+    Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('sr.upload');
 
-        Route::get('/history', function () {
-            return Inertia::render('Admin/History');
-        })->name('history');
-    });
+    Route::get('/summary', [SummaryController::class, 'index'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.index');
+    Route::get('/summary/export', [SummaryController::class, 'exportAll'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.exportAll');
+    Route::get('/summary/{id}', [SummaryController::class, 'show'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.show');
+    Route::get('/summary/{id}/data', [SummaryController::class, 'data'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.data');
+    Route::get('/summary/{id}/export', [SummaryController::class, 'export'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.export');
+    Route::delete('/summary/{id}', [SummaryController::class, 'destroy'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('summary.destroy');
+
+    Route::get('/spp', [SPPController::class, 'index'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('spp');
+    Route::get('/spp/{period}', [SPPController::class, 'show'])
+        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+        ->name('spp.show');
+
+    Route::get('/history', function () {
+        return Inertia::render('Admin/History');
+    })->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
+      ->name('history');
 
     // ===================== ADMIN ONLY =====================
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware(['role:admin'])->group(function () {
         Route::get('/shipments', function () {
             return Inertia::render('Admin/Shipments');
         })->name('shipments');
@@ -127,11 +148,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('debug.sr.latest');
     });
 
-    // ===================== PROFILE =====================
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 // Auth bawaan Breeze
+
+// Auth bawaan Breeze
 require __DIR__ . '/auth.php';
+

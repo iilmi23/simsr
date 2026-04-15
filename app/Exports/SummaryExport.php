@@ -16,18 +16,48 @@ class SummaryExport implements FromArray, WithStyles, WithColumnWidths, WithCust
 {
     protected $data;
 
-    // ── Colors ────────────────────────────────────────────────────────────
-    const COLOR_GREEN_DARK   = 'FF375623';
-    const COLOR_GREEN_LIGHT  = 'FFE2EFDA';
-    const COLOR_GREEN_MID    = 'FFC6EFCE';
+    // ── Fixed Left Columns ────────────────────────────────────────────────
+    const COLOR_HEADER_FIXED    = 'FF1D4D2A'; // dark forest       → col A-C header rows 1-4
+    const COLOR_LEFT_BG         = 'FF2D5A3D'; // slate green       → col A-C data rows
+    const COLOR_LEFT_QTY_BG     = 'FF3A6B4E'; // muted green       → "QTY" label col
 
-    const COLOR_FIRM_HEADER  = 'FFFFFF00';
-    const COLOR_FIRM_SUB     = 'FFFFFF00';
-    const COLOR_FIRM_4W_HDR  = 'FFBFBFBF';
-    const COLOR_FIRM_4W_DATA = 'FFD9D9D9';
+    // ── Period Header Sub-rows ────────────────────────────────────────────
+    const COLOR_HEADER_ETD      = 'FF1D6F42'; // forest green      → ETD row
+    const COLOR_HEADER_ETA      = 'FF2E9E5E'; // medium green      → ETA row
+    const COLOR_HEADER_WEEK     = 'FF237A50'; // between ETD/ETA   → week row
 
-    const COLOR_FORE_HEADER  = 'FFF4B183';
-    const COLOR_FORE_SUB     = 'FFFCE4D6';
+    // ── Data Rows ─────────────────────────────────────────────────────────
+    const COLOR_ROW_ODD         = 'FFEAF5EF'; // soft mint
+    const COLOR_ROW_EVEN        = 'FFC6E8D4'; // powder green
+
+    // ── Text ──────────────────────────────────────────────────────────────
+    const COLOR_TEXT_WHITE      = 'FFFFFFFF';
+    const COLOR_TEXT_MUTED      = 'FFAABFB0';
+    const COLOR_TEXT_VALUE      = 'FF0D4F2C';
+    const COLOR_TEXT_QTY_LABEL  = 'FFD4EDE0';
+
+    // ── Borders ───────────────────────────────────────────────────────────
+    const COLOR_BORDER_LIGHT    = 'FF8FC9A8';
+    const COLOR_BORDER_HEADER   = 'FF145233';
+
+    // ── FIRM / FORECAST group header colors ───────────────────────────────
+    const COLOR_FIRM_HEADER     = 'FFFFFF00'; // yellow
+    const COLOR_FORE_HEADER     = 'FFF4B183'; // orange
+
+    // ── TOT Column ────────────────────────────────────────────────────────
+    const COLOR_TOT_HEADER_BG   = 'FF5A8F75'; // muted green for TOT sub-header rows 2,3
+    const COLOR_TOT_WEEK_BG     = 'FF2D5A3D'; // darker forest green for TOT week row
+    const COLOR_TOT_DATA_ODD    = 'FFC6E8D4'; // powder green to match data odd
+    const COLOR_TOT_DATA_EVEN   = 'FFB0D9C4'; // deeper powder green for harmony
+    const COLOR_TOT_TEXT        = 'FF0D4F2C'; // dark green text matching VALUE color
+
+    // ── GRAND TOTAL Row ───────────────────────────────────────────────────
+    const COLOR_TOTAL_BG        = 'FF0F3320';
+    const COLOR_TOTAL_BORDER    = 'FF2E7D52';
+    const COLOR_TOTAL_TOP       = 'FF4CAF78';
+
+    /** @var array Cached periods with month totals */
+    private $_cachedPeriods = null;
 
     public function __construct($data)
     {
@@ -37,68 +67,103 @@ class SummaryExport implements FromArray, WithStyles, WithColumnWidths, WithCust
     // ── 1. Array ──────────────────────────────────────────────────────────
     public function array(): array
     {
-        [, $groups] = $this->buildPeriods();
-        $rows = [];
+        $periods = $this->getPeriodsWithMonthTotals();
+        $rows    = [];
 
-        // Row 1 — group labels
+        // ── Header Row 1: Group labels (FIRM / FORECAST per month group)
         $row1 = ['NO', 'ASSY NO', 'Order Type'];
-        foreach ($groups as $group) {
-            foreach ($group['periods'] as $i => $p) {
-                $row1[] = $i === 0 ? $group['type'] : '';
-            }
+        foreach ($periods as $period) {
+            // All columns filled via merges in styles() for group headers
+            $row1[] = '';
         }
         $rows[] = $row1;
 
-        // Row 2 — ETD
+        // ── Header Row 2: ETD / TOT
         $row2 = ['', '', 'ETD'];
-        foreach ($groups as $group) {
-            foreach ($group['periods'] as $p) {
-                $row2[] = $p['etd'];
-            }
+        foreach ($periods as $period) {
+            $row2[] = ($period['week'] === 'TOT') ? 'TOT' : $period['etd'];
         }
         $rows[] = $row2;
 
-        // Row 3 — ETA
+        // ── Header Row 3: ETA
         $row3 = ['', '', 'ETA'];
-        foreach ($groups as $group) {
-            foreach ($group['periods'] as $p) {
-                $row3[] = $p['eta'];
-            }
+        foreach ($periods as $period) {
+            $row3[] = ($period['week'] === 'TOT') ? '' : $period['eta'];
         }
         $rows[] = $row3;
 
-        // Row 4 — week
+        // ── Header Row 4: Week
         $row4 = ['', '', 'week'];
-        foreach ($groups as $group) {
-            foreach ($group['periods'] as $p) {
-                $row4[] = $p['week'];
-            }
+        foreach ($periods as $period) {
+            $row4[] = ($period['week'] === 'TOT') ? '' : $period['week'];
         }
         $rows[] = $row4;
 
-        // Data rows — satu baris per part_number
+        // ── Data Rows
         $grouped = $this->data->groupBy('part_number');
         $index   = 0;
 
         foreach ($grouped as $partNumber => $items) {
             $index++;
+            // Use assy_no if available (from first item), otherwise use part_number
+            $firstItem = $items->first();
+            $assyNo = ($firstItem->assy_no && $firstItem->assy_no !== '') ? $firstItem->assy_no : $partNumber;
+            $dataRow = [$index, $assyNo, 'QTY'];
 
-            // Lookup: "orderType|etd_raw|eta_raw|week" => qty (sum jika duplikat)
-            $lookup = [];
-            foreach ($items as $item) {
-                $key = implode('|', [$item->order_type, $item->etd, $item->eta, $item->week]);
-                $lookup[$key] = ($lookup[$key] ?? 0) + ((int)($item->qty ?? 0));
-            }
-
-            $dataRow = [$index, $partNumber, 'QTY'];
-            foreach ($groups as $group) {
-                foreach ($group['periods'] as $p) {
-                    $key       = implode('|', [$group['type'], $p['etd_raw'], $p['eta_raw'], $p['week']]);
-                    $dataRow[] = $lookup[$key] ?? 0;
+            foreach ($periods as $period) {
+                if ($period['week'] === 'TOT') {
+                    // Monthly subtotal for this part
+                    $monthKey = $period['month'];
+                    $total    = 0;
+                    foreach ($items as $item) {
+                        $itemMonth = $item->month ?? date('Y-m', strtotime($item->eta));
+                        if ($itemMonth === $monthKey) {
+                            $total += (int)($item->qty ?? 0);
+                        }
+                    }
+                    $dataRow[] = ($total === 0) ? '0' : $total;
+                } else {
+                    $key   = implode('|', [$period['etd_raw'], $period['eta_raw'], $period['week']]);
+                    $total = 0;
+                    foreach ($items as $item) {
+                        $itemKey = implode('|', [$item->etd, $item->eta, $item->week]);
+                        if ($itemKey === $key) {
+                            $total += (int)($item->qty ?? 0);
+                        }
+                    }
+                    $dataRow[] = ($total === 0) ? '0' : $total;
                 }
             }
+
             $rows[] = $dataRow;
         }
+
+        // ── Grand Total Row
+        $totalRow = ['', 'GRAND TOTAL', ''];
+        foreach ($periods as $period) {
+            if ($period['week'] === 'TOT') {
+                $monthKey = $period['month'];
+                $total    = 0;
+                foreach ($this->data as $item) {
+                    $itemMonth = $item->month ?? date('Y-m', strtotime($item->eta));
+                    if ($itemMonth === $monthKey) {
+                        $total += (int)($item->qty ?? 0);
+                    }
+                }
+                $totalRow[] = ($total === 0) ? '0' : $total;
+            } else {
+                $key   = implode('|', [$period['etd_raw'], $period['eta_raw'], $period['week']]);
+                $total = 0;
+                foreach ($this->data as $item) {
+                    $itemKey = implode('|', [$item->etd, $item->eta, $item->week]);
+                    if ($itemKey === $key) {
+                        $total += (int)($item->qty ?? 0);
+                    }
+                }
+                $totalRow[] = ($total === 0) ? '0' : $total;
+            }
+        }
+        $rows[] = $totalRow;
 
         return $rows;
     }
@@ -106,230 +171,344 @@ class SummaryExport implements FromArray, WithStyles, WithColumnWidths, WithCust
     // ── 2. Column widths ──────────────────────────────────────────────────
     public function columnWidths(): array
     {
-        $widths = ['A' => 5, 'B' => 14, 'C' => 10];
-        [, $groups] = $this->buildPeriods();
-        $total = array_sum(array_map(fn($g) => count($g['periods']), $groups));
-        for ($i = 0; $i < $total; $i++) {
-            $widths[Coordinate::stringFromColumnIndex($i + 4)] = 6.5;
+        $widths  = ['A' => 5, 'B' => 16, 'C' => 10];
+        $periods = $this->getPeriodsWithMonthTotals();
+
+        foreach ($periods as $i => $period) {
+            $col           = Coordinate::stringFromColumnIndex($i + 4);
+            $widths[$col]  = ($period['week'] === 'TOT') ? 6 : 7;
         }
+
         return $widths;
     }
 
     // ── 3. Start cell ─────────────────────────────────────────────────────
-    public function startCell(): string { return 'A1'; }
+    public function startCell(): string
+    {
+        return 'A1';
+    }
 
     // ── 4. Styles ─────────────────────────────────────────────────────────
     public function styles(Worksheet $sheet)
     {
-        [, $groups] = $this->buildPeriods();
-        $totalDataCols = array_sum(array_map(fn($g) => count($g['periods']), $groups));
-        $lastCol       = Coordinate::stringFromColumnIndex(3 + $totalDataCols);
-        $totalRows     = $sheet->getHighestRow();
+        $periods      = $this->getPeriodsWithMonthTotals();
+        $lastColIdx   = 3 + count($periods);
+        $lastCol      = Coordinate::stringFromColumnIndex($lastColIdx);
+        $totalRows    = $sheet->getHighestRow();
+        $dataLastRow  = $totalRows - 1;
 
-        // Row heights
-        for ($r = 1; $r <= 4; $r++) $sheet->getRowDimension($r)->setRowHeight(16);
-        for ($r = 5; $r <= $totalRows; $r++) $sheet->getRowDimension($r)->setRowHeight(15);
+        // ── Row heights
+        for ($r = 1; $r <= 4; $r++) {
+            $sheet->getRowDimension($r)->setRowHeight(16);
+        }
+        for ($r = 5; $r <= $totalRows; $r++) {
+            $sheet->getRowDimension($r)->setRowHeight(15);
+        }
 
-        // Freeze
+        // ── Freeze pane
         $sheet->freezePane('D5');
 
-        // Merge: NO, ASSY No (rows 1-4)
+        // ── Merge fixed cols A-B across header rows
         $sheet->mergeCells('A1:A4');
         $sheet->mergeCells('B1:B4');
 
-        // Merge: group headers (row 1)
-        $colOffset = 4;
-        foreach ($groups as $group) {
-            $count = count($group['periods']);
-            if ($count > 1) {
-                $cs = Coordinate::stringFromColumnIndex($colOffset);
-                $ce = Coordinate::stringFromColumnIndex($colOffset + $count - 1);
-                $sheet->mergeCells("{$cs}1:{$ce}1");
+        // ── Build month-group metadata for merges & coloring
+        // groups: [ ['type'=>'FIRM|FORECAST', 'month'=>'2025-02', 'startCol'=>4, 'endCol'=>9, 'totCol'=>9], ... ]
+        $monthGroups = $this->buildMonthGroups($periods);
+
+        // ── Row 1: Group header merges and colors
+        foreach ($monthGroups as $group) {
+            $startCol = Coordinate::stringFromColumnIndex($group['startCol']);
+            $endCol   = Coordinate::stringFromColumnIndex($group['endCol']);
+
+            if ($group['startCol'] <= $group['endCol']) {
+                $sheet->mergeCells("{$startCol}1:{$endCol}1");
             }
-            $colOffset += $count;
+
+            $groupLabel = $group['type'];
+            $sheet->getCell("{$startCol}1")->setValue($groupLabel);
+
+            $bgColor = ($group['type'] === 'FIRM')
+                ? self::COLOR_FIRM_HEADER
+                : self::COLOR_FORE_HEADER;
+
+            $sheet->getStyle("{$startCol}1:{$endCol}1")->applyFromArray([
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $bgColor]],
+                'font'      => ['bold' => true, 'color' => ['argb' => 'FF000000'], 'name' => 'Arial', 'size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_HEADER]]],
+            ]);
         }
 
-        // Base border
-        $sheet->getStyle("A1:{$lastCol}{$totalRows}")->applyFromArray([
-            'borders' => ['allBorders' => [
-                'borderStyle' => Border::BORDER_THIN,
-                'color'       => ['argb' => 'FFAAAAAA'],
-            ]],
+        // ── Fixed cols A-C header (rows 1-4)
+        $sheet->getStyle('A1:C4')->applyFromArray([
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_HEADER_FIXED]],
+            'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 9],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_HEADER]]],
         ]);
 
-        // Fixed left cols header (dark green)
-        foreach (['A', 'B', 'C'] as $col) {
-            $sheet->getStyle("{$col}1:{$col}4")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_GREEN_DARK]],
-                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'name' => 'Arial', 'size' => 9],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                                'vertical'   => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+        // ── Set headers in column C (row 2-4) — labels that aren't set by data array
+        $sheet->getCell('C2')->setValue('ETD');
+        $sheet->getCell('C3')->setValue('ETA');
+        $sheet->getCell('C4')->setValue('Week');
+
+        // ── Period column headers (rows 2-4)
+        foreach ($periods as $pIdx => $period) {
+            $colIdx = 4 + $pIdx;
+            $col    = Coordinate::stringFromColumnIndex($colIdx);
+            $isTot  = ($period['week'] === 'TOT');
+
+            // Row 2 — ETD
+            $sheet->getStyle("{$col}2")->applyFromArray([
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $isTot ? self::COLOR_TOT_HEADER_BG : self::COLOR_HEADER_ETD]],
+                'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 8],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_HEADER]]],
+            ]);
+            if (!$isTot) {
+                $sheet->getCell("{$col}2")->setValue($period['etd']);
+            }
+
+            // Row 3 — ETA
+            $sheet->getStyle("{$col}3")->applyFromArray([
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $isTot ? self::COLOR_TOT_HEADER_BG : self::COLOR_HEADER_ETA]],
+                'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 8],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_HEADER]]],
+            ]);
+            if (!$isTot) {
+                $sheet->getCell("{$col}3")->setValue($period['eta']);
+            }
+
+            // Row 4 — Week / TOT
+            $weekVal = ($period['week'] === 'TOT') ? 'TOT' : ($period['week'] ?: '');
+            $sheet->getCell("{$col}4")->setValue($weekVal);
+            $sheet->getStyle("{$col}4")->applyFromArray([
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $isTot ? self::COLOR_TOT_WEEK_BG : self::COLOR_HEADER_WEEK]],
+                'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_HEADER]]],
+            ]);
+
+            // Merge rows 2-4 for TOT column (no ETD/ETA/WEEK content)
+            if ($isTot) {
+                $sheet->mergeCells("{$col}2:{$col}4");
+            }
+        }
+
+        // ── Data rows — fixed left cols A-C
+        for ($r = 5; $r <= $dataLastRow; $r++) {
+            $sheet->getStyle("A{$r}:C{$r}")->applyFromArray([
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_LEFT_BG]],
+                'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FF334155']]],
+            ]);
+
+            // Part number: left-aligned with indent
+            $sheet->getStyle("B{$r}")->getAlignment()
+                  ->setHorizontal(Alignment::HORIZONTAL_LEFT)
+                  ->setIndent(1);
+
+            // QTY cell: lighter bg + smaller muted font
+            $sheet->getStyle("C{$r}")->applyFromArray([
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_LEFT_QTY_BG]],
+                'font' => ['bold' => false, 'color' => ['argb' => self::COLOR_TEXT_QTY_LABEL], 'name' => 'Arial', 'size' => 8],
             ]);
         }
 
-        // Group header colors
-        $colOffset = 4;
-        foreach ($groups as $group) {
-            $count       = count($group['periods']);
-            $isFirm      = $group['type'] === 'FIRM';
-            $headerColor = $isFirm ? self::COLOR_FIRM_HEADER : self::COLOR_FORE_HEADER;
-            $subColor    = $isFirm ? self::COLOR_FIRM_SUB    : self::COLOR_FORE_SUB;
-            $cs          = Coordinate::stringFromColumnIndex($colOffset);
-            $ce          = Coordinate::stringFromColumnIndex($colOffset + $count - 1);
+        // ── Data rows — period columns (alternating bg + TOT col differentiated)
+        for ($r = 5; $r <= $dataLastRow; $r++) {
+            $isOdd = ($r % 2 === 1);
 
-            $sheet->getStyle("{$cs}1:{$ce}1")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $headerColor]],
-                'font'      => ['bold' => true, 'color' => ['argb' => 'FF000000'], 'name' => 'Arial', 'size' => 9],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                                'vertical'   => Alignment::VERTICAL_CENTER],
-            ]);
-            $sheet->getStyle("{$cs}2:{$ce}4")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $subColor]],
-                'font'      => ['bold' => true, 'color' => ['argb' => 'FF000000'], 'name' => 'Arial', 'size' => 9],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                                'vertical'   => Alignment::VERTICAL_CENTER],
-            ]);
+            foreach ($periods as $pIdx => $period) {
+                $colIdx    = 4 + $pIdx;
+                $col       = Coordinate::stringFromColumnIndex($colIdx);
+                $cellCoord = "{$col}{$r}";
+                $isTot     = ($period['week'] === 'TOT');
 
-            // Grey 4W columns inside FIRM
-            if ($isFirm) {
-                $pIdx = 0;
-                foreach ($group['periods'] as $p) {
-                    if (strtoupper($p['week']) === '4W') {
-                        $gc = Coordinate::stringFromColumnIndex($colOffset + $pIdx);
-                        // Rows 2-4 header grey (override kuning)
-                        $sheet->getStyle("{$gc}2:{$gc}4")->applyFromArray([
-                            'fill' => ['fillType' => Fill::FILL_SOLID,
-                                       'startColor' => ['argb' => self::COLOR_FIRM_4W_HDR]],
-                        ]);
-                        // Data rows grey
-                        $sheet->getStyle("{$gc}5:{$gc}{$totalRows}")->applyFromArray([
-                            'fill' => ['fillType' => Fill::FILL_SOLID,
-                                       'startColor' => ['argb' => self::COLOR_FIRM_4W_DATA]],
-                        ]);
+                if ($isTot) {
+                    $bgColor = $isOdd ? self::COLOR_TOT_DATA_ODD : self::COLOR_TOT_DATA_EVEN;
+                    $sheet->getStyle($cellCoord)->applyFromArray([
+                        'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $bgColor]],
+                        'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TOT_TEXT], 'name' => 'Arial', 'size' => 9],
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
+                        'numberFormat' => ['formatCode' => '0'],
+                        'borders'   => [
+                            'allBorders' => ['borderStyle' => Border::BORDER_THIN,   'color' => ['argb' => 'FF5A8F75']],
+                            'left'       => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF2D5A3D']],
+                            'right'      => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF2D5A3D']],
+                        ],
+                    ]);
+                } else {
+                    $bgColor = $isOdd ? self::COLOR_ROW_ODD : self::COLOR_ROW_EVEN;
+                    $sheet->getStyle($cellCoord)->applyFromArray([
+                        'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $bgColor]],
+                        'font'      => ['name' => 'Arial', 'size' => 9, 'bold' => false],
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
+                        'numberFormat' => ['formatCode' => '0'],
+                        'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::COLOR_BORDER_LIGHT]]],
+                    ]);
+                }
+
+                // Zero / non-zero coloring
+                $cellVal = $sheet->getCell($cellCoord)->getValue();
+                if ($isTot) {
+                    // TOT column always shows value prominently
+                    // Zero values: muted green; non-zero: dark green
+                    $fontColor = ($cellVal === 0 || $cellVal === '0') ? 'FF7AA68A' : self::COLOR_TOT_TEXT;
+                    $sheet->getStyle($cellCoord)->getFont()->getColor()->setARGB($fontColor);
+                    $sheet->getStyle($cellCoord)->getFont()->setBold($cellVal !== 0 && $cellVal !== '0');
+                } else {
+                    if ($cellVal === 0 || $cellVal === '0') {
+                        $sheet->getStyle($cellCoord)->getFont()->getColor()->setARGB(self::COLOR_TEXT_MUTED);
+                        $sheet->getStyle($cellCoord)->getFont()->setBold(false);
+                    } else {
+                        $sheet->getStyle($cellCoord)->getFont()
+                              ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color(self::COLOR_TEXT_VALUE));
+                        $sheet->getStyle($cellCoord)->getFont()->setBold(true);
                     }
-                    $pIdx++;
                 }
             }
-
-            $colOffset += $count;
         }
 
-        // Fixed left cols data (dark green)
-        $sheet->getStyle("A5:C{$totalRows}")->applyFromArray([
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_GREEN_DARK]],
-            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'name' => 'Arial', 'size' => 9],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER,
-                            'vertical'   => Alignment::VERTICAL_CENTER],
+        // ── GRAND TOTAL row
+        $sheet->getStyle("A{$totalRows}:{$lastCol}{$totalRows}")->applyFromArray([
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::COLOR_TOTAL_BG]],
+            'font'      => ['bold' => true, 'color' => ['argb' => self::COLOR_TEXT_WHITE], 'name' => 'Arial', 'size' => 9],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
+            'numberFormat' => ['formatCode' => '0'],
+            'borders'   => [
+                'top'        => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => self::COLOR_TOTAL_TOP]],
+                'bottom'     => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => self::COLOR_TOTAL_BG]],
+                'allBorders' => ['borderStyle' => Border::BORDER_THIN,   'color' => ['argb' => self::COLOR_TOTAL_BORDER]],
+            ],
         ]);
-        $sheet->getStyle("B5:B{$totalRows}")->getAlignment()
-              ->setHorizontal(Alignment::HORIZONTAL_LEFT);
 
-        // Alternating data rows
-        for ($r = 5; $r <= $totalRows; $r++) {
-            $color = ($r % 2 === 1) ? self::COLOR_GREEN_LIGHT : self::COLOR_GREEN_MID;
-            $sheet->getStyle("D{$r}:{$lastCol}{$r}")->applyFromArray([
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $color]],
-                'font'      => ['name' => 'Arial', 'size' => 9],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT,
-                                'vertical'   => Alignment::VERTICAL_CENTER],
-            ]);
-        }
+        // Grand total label: left-aligned
+        $sheet->getStyle("B{$totalRows}")->getAlignment()
+              ->setHorizontal(Alignment::HORIZONTAL_LEFT)
+              ->setIndent(1);
+
+        // ── Outer border
+        $sheet->getStyle("A1:{$lastCol}{$totalRows}")->applyFromArray([
+            'borders' => ['outline' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF1E2A3A']]],
+        ]);
 
         return [];
     }
 
-    // ── Helper: buildPeriods ──────────────────────────────────────────────
-    protected function buildPeriods(): array
+    // ── Helper: cached periods ────────────────────────────────────────────
+    protected function getPeriodsWithMonthTotals(): array
     {
-        // ✅ Filter FIRM: hanya bulan yang sedang berjalan
-        $currentMonth = (int) date('n');
-        $currentYear  = (int) date('Y');
+        if ($this->_cachedPeriods !== null) {
+            return $this->_cachedPeriods;
+        }
 
-        $firmPeriods     = [];
-        $forecastPeriods = [];
+        // 1. Group unique periods by (order_type → month)
+        $byTypeMonth = []; // ['FIRM' => ['2025-02' => [...periods...]], 'FORECAST' => [...]]
 
         foreach ($this->data as $item) {
-            $key = implode('|', [$item->etd, $item->eta, $item->week]);
+            $type  = $item->order_type ?? 'FORECAST';
+            $month = $item->month ?? date('Y-m', strtotime($item->eta));
+            $key   = implode('|', [$item->etd, $item->eta, $item->week]);
 
-            $entry = [
+            $byTypeMonth[$type][$month][$key] = [
                 'etd'     => date('n/j', strtotime($item->etd)),
                 'eta'     => date('n/j', strtotime($item->eta)),
                 'week'    => $item->week,
                 'etd_raw' => $item->etd,
                 'eta_raw' => $item->eta,
-                'month'   => $item->month ?? date('Y-m', strtotime($item->eta)),
+                'month'   => $month,
+                'type'    => $type,
             ];
+        }
 
-            if ($item->order_type === 'FIRM') {
-                // ✅ Hanya masukkan jika ETD ada di bulan berjalan
-                $etdMonth = (int) date('n', strtotime($item->etd));
-                $etdYear  = (int) date('Y', strtotime($item->etd));
+        // Sort types: FIRM first, FORECAST after
+        $sortedTypes = array_filter(['FIRM', 'FORECAST'], fn($t) => isset($byTypeMonth[$t]));
 
-                if ($etdMonth === $currentMonth && $etdYear === $currentYear) {
-                    $firmPeriods[$key] ??= $entry;
+        $result = [];
+
+        foreach ($sortedTypes as $type) {
+            $months = $byTypeMonth[$type];
+            ksort($months); // sort months chronologically
+
+            foreach ($months as $month => $periods) {
+                // Sort weeks inside month by ETD date
+                usort($periods, fn($a, $b) => strcmp($a['etd_raw'], $b['etd_raw']));
+
+                // Take up to 5 weeks, but always keep exactly 5 week slots.
+                // If there are fewer than 5 week periods, fill later slots with week numbers.
+                $weekCount = 0;
+                foreach ($periods as $period) {
+                    if ($weekCount >= 5) break;
+                    $result[]  = $period;
+                    $weekCount++;
                 }
-            } else {
-                $forecastPeriods[$key] ??= $entry;
+                while ($weekCount < 5) {
+                    $weekNum = $weekCount + 1;
+                    $result[] = [
+                        'week'    => "{$weekNum}W",
+                        'month'   => $month,
+                        'type'    => $type,
+                        'etd'     => '',
+                        'eta'     => '',
+                        'etd_raw' => '',
+                        'eta_raw' => '',
+                    ];
+                    $weekCount++;
+                }
+
+                // TOT column after the weeks of this month
+                $result[] = [
+                    'week'    => 'TOT',
+                    'month'   => $month,
+                    'type'    => $type,
+                    'etd'     => '',
+                    'eta'     => '',
+                    'etd_raw' => '',
+                    'eta_raw' => '',
+                ];
             }
         }
 
-        // Sort by ETD
-        uasort($firmPeriods,     fn($a, $b) => strcmp($a['etd_raw'], $b['etd_raw']));
-        uasort($forecastPeriods, fn($a, $b) => strcmp($a['etd_raw'], $b['etd_raw']));
-
-        // Split FORECAST per bulan
-        $forecastGroups = $this->splitForecastByMonth($forecastPeriods);
-
-        $groups = [];
-        if (!empty($firmPeriods)) {
-            $groups[] = ['type' => 'FIRM', 'periods' => array_values($firmPeriods)];
-        }
-        foreach ($forecastGroups as $chunk) {
-            $groups[] = ['type' => 'FORECAST', 'periods' => $chunk];
-        }
-
-        $allPeriods = array_merge(array_values($firmPeriods), array_values($forecastPeriods));
-        return [$allPeriods, $groups];
+        $this->_cachedPeriods = $result;
+        return $result;
     }
 
+    // ── Helper: build month groups for Row-1 merges ───────────────────────
     /**
-     * Split FORECAST periods menjadi kelompok per bulan.
-     *
-     * - Format "1W","2W",... (TYC) → split saat weekNum == 1
-     * - Format angka murni "08","09",... (YNA) → split berdasarkan field 'month'
+     * Returns array of groups, each group spanning one (type, month) block:
+     * ['type' => 'FIRM', 'month' => '2025-02', 'startCol' => 4, 'endCol' => 9]
      */
-    private function splitForecastByMonth(array $forecastPeriods): array
+    protected function buildMonthGroups(array $periods): array
     {
-        if (empty($forecastPeriods)) return [];
+        $groups      = [];
+        $currentGroup = null;
 
-        $firstWeek  = array_values($forecastPeriods)[0]['week'] ?? '';
-        $isNwFormat = (bool) preg_match('/^\d+W$/i', trim($firstWeek));
+        foreach ($periods as $pIdx => $period) {
+            $colIdx  = 4 + $pIdx;
+            $groupKey = ($period['type'] ?? 'FORECAST') . '|' . $period['month'];
 
-        $groups       = [];
-        $currentChunk = [];
-        $currentMonth = null;
-
-        foreach ($forecastPeriods as $p) {
-            if ($isNwFormat) {
-                $weekNum = (int) preg_replace('/\D/', '', $p['week']);
-                if ($weekNum === 1 && !empty($currentChunk)) {
-                    $groups[]     = $currentChunk;
-                    $currentChunk = [];
+            if ($currentGroup === null || $currentGroup['key'] !== $groupKey) {
+                if ($currentGroup !== null) {
+                    $groups[] = $currentGroup;
                 }
+                $currentGroup = [
+                    'key'      => $groupKey,
+                    'type'     => $period['type'] ?? 'FORECAST',
+                    'month'    => $period['month'],
+                    'startCol' => $colIdx,
+                    'endCol'   => $colIdx,
+                ];
             } else {
-                $month = $p['month'];
-                if ($currentMonth !== null && $month !== $currentMonth && !empty($currentChunk)) {
-                    $groups[]     = $currentChunk;
-                    $currentChunk = [];
-                }
-                $currentMonth = $month;
+                $currentGroup['endCol'] = $colIdx;
             }
-
-            $currentChunk[] = $p;
         }
 
-        if (!empty($currentChunk)) {
-            $groups[] = $currentChunk;
+        if ($currentGroup !== null) {
+            $groups[] = $currentGroup;
         }
 
         return $groups;

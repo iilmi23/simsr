@@ -173,12 +173,6 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
                                 >
                                     Reset
                                 </button>
-                                {/* <a
-                                    href={`/summary/export?customer=${customer || ''}&search=${search || ''}`}
-                                    className="inline-flex justify-center items-center h-11 px-6 rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 transition-all shadow-sm"
-                                >
-                                    Export All
-                                </a> */}
                             </div>
                         </div>
                     </div>
@@ -192,6 +186,7 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Customer</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Port</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Source File</th>
+                                        <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Sheet</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Items</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Upload Date</th>
                                         <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Action</th>
@@ -211,31 +206,34 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
                                                 <td className="p-3 text-gray-700">{sr.customer}</td>
                                                 <td className="p-3 text-gray-700">{sr.port || '-'}</td>
                                                 <td className="p-3 font-medium text-gray-900">{sr.source_file || '-'}</td>
+                                                <td className="p-3 text-gray-700">{sr.sheet_name || '-'}</td>
                                                 <td className="p-3 text-gray-700">{sr.total_items}</td>
                                                 <td className="p-3 text-gray-700">{new Date(sr.upload_date).toLocaleDateString()}</td>
-                                                <td className="p-3 flex flex-wrap gap-2">
-                                                    <button
-                                                        onClick={() => handleView(sr.id)}
-                                                        className="inline-flex items-center justify-center w-10 h-10 bg-[#1D6F42] text-white rounded-lg hover:bg-green-700"
-                                                        title="View"
-                                                    >
-                                                        <EyeIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <a
-                                                        href={`/summary/${sr.id}/export`}
-                                                        className="inline-flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                                        title="Export"
-                                                    >
-                                                        <ArrowDownTrayIcon className="w-5 h-5" />
-                                                    </a>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(sr.id)}
-                                                        className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                                        <button
+                                                            onClick={() => handleView(sr.id)}
+                                                            className="inline-flex items-center justify-center w-8 h-8 bg-[#1D6F42] text-white rounded-lg hover:bg-green-700 transition-colors flex-shrink-0"
+                                                            title="View"
+                                                        >
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <a
+                                                            href={`/summary/${sr.id}/export`}
+                                                            className="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+                                                            title="Export"
+                                                        >
+                                                            <ArrowDownTrayIcon className="w-4 h-4" />
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(sr.id)}
+                                                            className="inline-flex items-center justify-center w-8 h-8 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex-shrink-0"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))

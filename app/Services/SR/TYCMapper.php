@@ -34,6 +34,11 @@ class TYCMapper implements SRMapperInterface
             throw new \Exception("Sheet kosong atau tidak valid");
         }
 
+        // Safety check: limit sheet size to prevent memory issues
+        if (count($sheet) > 10000) {
+            throw new \Exception("Sheet terlalu besar (max 10,000 rows)");
+        }
+
         Log::info('=== MAPPING TYC START ===');
 
         [$headerRow, $headerRowIndex] = $this->detectHeaderRow($sheet) ?? [$sheet[self::HEADER_ROW] ?? [], self::HEADER_ROW];
@@ -165,7 +170,7 @@ class TYCMapper implements SRMapperInterface
                     $qty = (int) $qty;
                 }
 
-                if ($qty <= 0) continue;
+                if ($qty < 0) continue;
 
                 $result[] = [
                     'customer'      => 'TYC',
@@ -190,6 +195,10 @@ class TYCMapper implements SRMapperInterface
                         'col'        => $colIndex + 1,
                     ]),
                 ];
+            }
+            // Safety check: prevent too many records
+            if (count($result) > 50000) {
+                throw new \Exception("Terlalu banyak records (max 50,000). Sheet mungkin tidak valid.");
             }
         }
 

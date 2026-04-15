@@ -15,10 +15,13 @@ class YNACustomerSeeder extends Seeder
      */
     public function run(): void
     {
-        Customer::create([
-            'name' => 'Yazaki North America',
-            'code' => 'YNA',
-            'keterangan' => 'YNA customer for SR uploads'
-        ]);
+        Customer::updateOrCreate(
+            ['code' => 'YNA'], // Cek berdasarkan code
+            [
+                'name' => 'Yazaki North America',
+                'code' => 'YNA',
+                'keterangan' => 'YNA customer for SR uploads'
+            ]
+        );
     }
 }

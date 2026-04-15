@@ -5,13 +5,26 @@ import { UserCircleIcon } from "@heroicons/react/24/outline";
 export default function Topbar({ sidebarOpen, setSidebarOpen }) {
     const [open, setOpen] = useState(false);
     const dropdownRef = useRef();
-    const user = usePage().props.auth.user;
+    const user = usePage().props.auth?.user;
+
+    // Guard: jika user belum ter-share, render minimal
+    if (!user) {
+        return (
+            <header className="fixed top-0 left-0 right-0 h-[60px] bg-white border-b border-gray-200 shadow-sm z-50">
+                <div className="flex items-center justify-between h-full px-5 md:px-6">
+                    <div>Loading...</div>
+                </div>
+            </header>
+        );
+    }
+
     const roleLabel = {
         admin: 'Admin',
+        staff: 'PPC Staff',
         ppc_staff: 'PPC Staff',
         ppc_supervisor: 'PPC Supervisor',
         ppc_manager: 'PPC Manager',
-    }[user?.role] ?? 'User';
+    }[user.role] ?? 'User';
 
     useEffect(() => {
         function handleClick(e) {

@@ -181,6 +181,8 @@ class SRController extends Controller
                 );
             }
 
+            $sheetName = $worksheet->getTitle();
+
             // Convert to array dengan format yang konsisten (0-based index)
             $sheetData = [];
             $highestRow = $worksheet->getHighestRow();
@@ -239,8 +241,63 @@ class SRController extends Controller
             ]);
 
             // 6. Map
-            $mapped = $this->runMapper($mapper, $customer->code, $sheetData, $tempPath, $sheetIndex, $options);
-            $mapped = array_values(array_filter($mapped));
+            $uploadBatches = [];
+            if (strtoupper($customer->code) === 'YC') {
+                $mapped = $this->runYCMapper($mapper, $tempPath, $options, true, $sheetIndex);
+                $mapped = array_values(array_filter($mapped));
+
+                if (empty($mapped)) {
+                    return redirect()->back()->with(
+                        'error',
+                        '❌ Mapping gagal: tidak ada data valid untuk sheet YC. ' .
+                            'Periksa format file untuk customer ' . $customer->name . '.'
+                    );
+                }
+
+                $now         = now();
+                $uploadBatch = Str::uuid()->toString();
+                $uploadBatches[] = $uploadBatch;
+
+                foreach ($mapped as &$item) {
+                    $item['source_file']  = $originalName;
+                    $item['upload_batch'] = $uploadBatch;
+                    $item['sheet_index']  = $sheetIndex;
+                    $item['sheet_name']   = $sheetName;
+                    $item['port']         = $portName ?? ($item['port'] ?? null);
+                    $item['customer']     = $customer->code;
+                    $item['created_at']   = $now;
+                    $item['updated_at']   = $now;
+                }
+                unset($item);
+            } else {
+                $mapped = $this->runMapper($mapper, $customer->code, $sheetData, $tempPath, $sheetIndex, $options);
+                $mapped = array_values(array_filter($mapped));
+
+                if (empty($mapped)) {
+                    return redirect()->back()->with(
+                        'error',
+                        '❌ Mapping gagal: tidak ada data valid. ' .
+                            'Periksa format file untuk customer ' . $customer->name . '.'
+                    );
+                }
+
+                // 7. Tambah metadata
+                $now         = now();
+                $uploadBatch = Str::uuid()->toString();
+                $uploadBatches[] = $uploadBatch;
+
+                foreach ($mapped as &$item) {
+                    $item['source_file']  = $originalName;
+                    $item['upload_batch'] = $uploadBatch;
+                    $item['sheet_index']  = $sheetIndex;
+                    $item['sheet_name']   = $sheetName;
+                    $item['port']         = $portName ?? ($item['port'] ?? null);
+                    $item['customer']     = $customer->code;
+                    $item['created_at']   = $now;
+                    $item['updated_at']   = $now;
+                }
+                unset($item);
+            }
 
             if (empty($mapped)) {
                 return redirect()->back()->with(
@@ -251,21 +308,6 @@ class SRController extends Controller
             }
 
             Log::info('Mapping selesai', ['records' => count($mapped)]);
-
-            // 7. Tambah metadata
-            $now         = now();
-            $uploadBatch = Str::uuid()->toString();
-
-            foreach ($mapped as &$item) {
-                $item['source_file']  = $originalName;
-                $item['upload_batch'] = $uploadBatch;
-                $item['port']         = $portName ?? ($item['port'] ?? null);
-                $item['customer']     = $customer->code;
-                $item['created_at']   = $now;
-                $item['updated_at']   = $now;
-            }
-            unset($item);
-
             $sppRows = $this->buildSppRecords($mapped, $now);
 
             // 8. Insert ke DB
@@ -305,7 +347,7 @@ class SRController extends Controller
                 number_format($totalQty)
             );
 
-            Log::info($message, ['upload_batch' => $uploadBatch]);
+            Log::info($message, ['upload_batch' => $uploadBatches]);
 
             return redirect()->route('summary.index')->with('success', $message);
         } catch (\Exception $e) {
@@ -421,19 +463,32 @@ class SRController extends Controller
         int               $sheetIndex,
         array             $options
     ): array {
-        if (strtoupper($customerCode) === 'YNA') {
-            // YNAMapper: legacy signature — menerima filePath & sheetIndex
-            return $mapper->map($sheetData, null, $tempPath, $sheetIndex);
-        }
+        try {
+            if (strtoupper($customerCode) === 'YNA') {
+                // YNAMapper: legacy signature — menerima filePath & sheetIndex
+                return $mapper->map($sheetData, null, $tempPath, $sheetIndex);
+            }
 
-        if (strtoupper($customerCode) === 'YC') {
-            // YCMapper: multi-sheet — untuk preview gunakan single sheet, untuk upload semua sheets
-            $isPreview = debug_backtrace()[1]['function'] === 'preview'; // Simple detection
-            return $this->runYCMapper($mapper, $tempPath, $options, $isPreview, $isPreview ? $sheetIndex : null);
-        }
+            if (strtoupper($customerCode) === 'YC') {
+                // YCMapper: hanya proses sheet yang dipilih, baik untuk preview maupun upload
+                $result = $this->runYCMapper($mapper, $tempPath, $options, true, $sheetIndex);
 
-        // TYCMapper, SAIMapper, dan semua mapper baru: signature standar
-        return $mapper->map($sheetData, null, $options);
+                // Validasi hasil YCMapper
+                if (!is_array($result)) {
+                    throw new \Exception('YCMapper result bukan array: ' . gettype($result));
+                }
+
+                return $result;
+            }
+
+            // TYCMapper, SAIMapper, dan semua mapper baru: signature standar
+            return $mapper->map($sheetData, null, $options);
+        } catch (\Exception $e) {
+            Log::error("runMapper error for {$customerCode}: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -447,7 +502,7 @@ class SRController extends Controller
      * @param bool $singleSheetMode Jika true, hanya proses sheet dengan index tertentu
      * @param int|null $sheetIndex Index sheet untuk single sheet mode
      */
-    private function runYCMapper(YCMapper $mapper, string $tempPath, array $options, bool $singleSheetMode = false, ?int $sheetIndex = null): array
+    private function runYCMapper(YCMapper $mapper, string $tempPath, array $options, bool $singleSheetMode = false, ?int $sheetIndex = null, bool $groupBySheet = false): array
     {
         try {
             // Load spreadsheet untuk mendapatkan semua sheets
@@ -504,12 +559,60 @@ class SRController extends Controller
             }
 
             // Jalankan YCMapper::mapAllSheets
-            return $mapper->mapAllSheets($allSheets, $sheetNames, $hiddenSheets, null, $options);
+            try {
+                $sheetResults = $mapper->mapAllSheets($allSheets, $sheetNames, $hiddenSheets, null, $options);
+            } catch (\Exception $e) {
+                Log::error('YCMapper::mapAllSheets failed: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                    'sheets_count' => count($allSheets),
+                ]);
+                throw new \Exception('YCMapper error: ' . $e->getMessage());
+            }
+
+            // Validasi struktur hasil sebelum flatten
+            if (!is_array($sheetResults)) {
+                throw new \Exception('YCMapper::mapAllSheets harus return array, got ' . gettype($sheetResults));
+            }
+
+            if ($groupBySheet) {
+                return $sheetResults;
+            }
+
+            // Flatten semua sheet results menjadi satu array flat untuk kompatibilitas
+            $result = [];
+            try {
+                foreach ($sheetResults as $sheetIndex => $sheetRecords) {
+                    if (!is_array($sheetRecords)) {
+                        Log::warning("YCMapper: sheet $sheetIndex bukan array, skip", [
+                            'type' => gettype($sheetRecords),
+                        ]);
+                        continue;
+                    }
+                    $result = array_merge($result, $sheetRecords);
+                    unset($sheetRecords); // Bebaskan memory
+                }
+            } catch (\Exception $e) {
+                Log::error('Flatten error: ' . $e->getMessage());
+                throw new \Exception('Gagal memproses hasil sheets: ' . $e->getMessage());
+            }
+
+            unset($sheetResults); // Bebaskan memory sheet results
+            return $result;
 
         } catch (\Exception $e) {
-            Log::error('runYCMapper error: ' . $e->getMessage());
+            Log::error('runYCMapper error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
             throw $e;
         }
+    }
+
+    /**
+     * Jalankan YCMapper dan kembalikan hasil per sheet tanpa flatten.
+     */
+    private function runYCMapperGrouped(YCMapper $mapper, string $tempPath, array $options): array
+    {
+        return $this->runYCMapper($mapper, $tempPath, $options, false, null, true);
     }
 
     /**

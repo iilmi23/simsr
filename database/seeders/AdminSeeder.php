@@ -15,16 +15,28 @@ class AdminSeeder extends Seeder
     {
         // Cek apakah admin sudah ada, jika belum buat
         User::updateOrCreate(
-            ['email' => 'admin@simsr.com'], // Cek berdasarkan email
+            ['email' => 'admin@jai.co.id'], // Cek berdasarkan email
             [
                 'name' => 'Admin PPC',
-                'email' => 'admin@simsr.com',
+                'email' => 'admin@jai.co.id',
                 'password' => Hash::make('jai2026!'),
                 'email_verified_at' => now(), // Langsung verified
                 'role' => 'admin',
             ]
         );
 
-        $this->command->info('Admin users created successfully!');
+        // Buat user staff PPC
+        User::updateOrCreate(
+            ['email' => 'ppc1@jai.co.id'], // Cek berdasarkan email
+            [
+                'name' => 'PPC1',
+                'email' => 'ppc1@jai.co.id',
+                'password' => Hash::make('jai2026!'),
+                'email_verified_at' => now(), // Langsung verified
+                'role' => 'ppc_staff',
+            ]
+        );
+
+        $this->command->info('Admin and Staff users created successfully!');
     }
 }

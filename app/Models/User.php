@@ -48,15 +48,21 @@ class User extends Authenticatable
         ];
     }
 
+    protected function normalizeRole(string $role): string
+    {
+        return match ($role) {
+            'staff', 'ppc_staff' => 'ppc_staff',
+            default => $role,
+        };
+    }
+
     public function hasRole(array|string $roles): bool
     {
-        $currentRole = $this->role ?? 'ppc_staff';
+        $currentRole = $this->normalizeRole($this->role ?? 'staff');
+        $roles = is_array($roles) ? $roles : [$roles];
+        $normalizedRoles = array_map(fn ($role) => $this->normalizeRole($role), $roles);
 
-        if (is_array($roles)) {
-            return in_array($currentRole, $roles, true);
-        }
-
-        return $currentRole === $roles;
+        return in_array($currentRole, $normalizedRoles, true);
     }
 
     public function isAdmin(): bool
@@ -64,28 +70,19 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
-    public function isPpcStaff(): bool
+    public function isStaff(): bool
     {
-        return $this->role === 'ppc_staff';
-    }
-
-    public function isPpcSupervisor(): bool
-    {
-        return $this->role === 'ppc_supervisor';
-    }
-
-    public function isPpcManager(): bool
-    {
-        return $this->role === 'ppc_manager';
+        return $this->hasRole(['staff', 'ppc_staff']);
     }
 
     public function getRoleLabelAttribute(): string
     {
         return match ($this->role) {
             'admin' => 'Admin',
+            'ppc_staff', 'staff' => 'PPC Staff',
             'ppc_supervisor' => 'PPC Supervisor',
             'ppc_manager' => 'PPC Manager',
-            default => 'PPC Staff',
+            default => 'Staff',
         };
     }
 }

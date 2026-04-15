@@ -15,12 +15,12 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
  *
  *   Blok offset dari baris PSA# (anchor):
  *     +0  F='PSA#'              → anchor penanda awal blok baru
- *     +1  F='YNA Part#'         H='YNA Part Description'  I=<part_number>
+ *     +1  F='YNA Part#'   H='YNA Part Description'  I=<part_number>
  *     +2  F='Customer Part#'
- *     +3  F='High Fab'          I='ETD Date'  J..=tanggal ETD per kolom
- *     +4  F='High Raw'          I='ETA Date'  J..=tanggal ETA per kolom
- *     +5  F='Car line'          I='Net'       J..=qty per kolom
- *     +6  F='Family'            I='Cum'
+ *     +3  F='High Fab'    I='ETD Date'  J..=tanggal ETD per kolom
+ *     +4  F='High Raw'    I='ETA Date'  J..=tanggal ETA per kolom
+ *     +5  F='Car line'    I='Net'       J..=qty per kolom
+ *     +6  F='Family'      I='Cum'
  *     +7  F='Cum Received'
  *     +8  F='Comments'
  *     +9  (blank separator)
@@ -30,8 +30,9 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
  *     - ETD dan Net SELALU ada; ETA sering kosong → fallback = ETD + 42 hari
  *     - Tidak ada label FIRM/FORECAST → semua di-set 'FIRM'
  *
- * WINDOW FILTER (sama dengan TYC):
- *   FIRM → sebulan sebelumnya + bulan berjalan
+ * WINDOW FILTER:
+ *   YNA mengambil semua tanggal ETD/ETA dari file,
+ *   tanpa membatasi ke window FIRM/FORECAST.
  */
 class YNAMapper implements SRMapperInterface
 {
@@ -107,12 +108,9 @@ class YNAMapper implements SRMapperInterface
 
         Log::info("Total rows dibaca: " . count($allRows));
 
-        // Tentukan reference date untuk window filter
+        // Tentukan reference date untuk log; YNA akan mengambil semua tanggal ETD/ETA dari file
         $ref = $referenceDate ?? Carbon::now();
-        $windowStart = $ref->copy()->subMonth()->startOfMonth();
-        $windowEnd   = $ref->copy()->endOfMonth();
-
-        Log::info("Reference: {$ref->toDateString()} | Window: {$windowStart->format('Y-m')} ~ {$windowEnd->format('Y-m')}");
+        Log::info("Reference: {$ref->toDateString()} | YNA mapper mengambil semua kolom tanggal ETD/ETA tanpa window filter");
 
         // Temukan semua baris anchor PSA#
         $psaIndices = $this->findPsaRows($allRows);
@@ -131,14 +129,14 @@ class YNAMapper implements SRMapperInterface
 
         foreach ($psaIndices as $psaIdx) {
             try {
-                $records = $this->parseBlock($allRows, $psaIdx, $windowStart, $windowEnd);
+                $records = $this->parseBlock($allRows, $psaIdx);
 
                 if (!empty($records)) {
                     $result        = array_merge($result, $records);
                     $processedParts++;
                 } else {
                     $skippedParts++;
-                    Log::debug("Block row " . ($psaIdx + 1) . " tidak punya data dalam window.");
+                    Log::debug("Block row " . ($psaIdx + 1) . " tidak punya data.");
                 }
             } catch (\Throwable $e) {
                 Log::warning("Error parsing block di row " . ($psaIdx + 1) . ": " . $e->getMessage());
@@ -150,8 +148,7 @@ class YNAMapper implements SRMapperInterface
 
         if (empty($result)) {
             throw new \Exception(
-                "Tidak ada data QTY > 0 dalam window " .
-                "{$windowStart->format('Y-m')} ~ {$windowEnd->format('Y-m')}. " .
+                "Tidak ada data ETD/ETA yang valid di file YNA. " .
                 "Total blocks: " . count($psaIndices) . "."
             );
         }
@@ -162,81 +159,110 @@ class YNAMapper implements SRMapperInterface
     /**
      * Parse satu blok part (10 baris mulai dari PSA# row).
      *
+     * Struktur kolom pada +1 row:
+     *   col E (idx 4): 'YNA Part#'          — label penanda baris
+     *   col H (idx 7): 'YNA Part Description' — header kolom deskripsi
+     *   col I (idx 8): <actual_part_number>  — nilai yang kita ambil
+     *
+     * PERBAIKAN BUG: Sebelumnya validasi memeriksa descRow[7] === 'YNA Part Description',
+     * padahal col H bisa berisi deskripsi part yang bebas (bukan teks literal tersebut).
+     * Validasi yang benar adalah memeriksa label di col F (idx 5) = 'YNA Part#'.
+     *
      * @param array  $allRows    Semua baris sheet
      * @param int    $psaIdx     Index baris PSA# (0-based)
-     * @param Carbon $windowStart Awal window filter
-     * @param Carbon $windowEnd   Akhir window filter
-     * @return array Records yang masuk window
+     * @return array Records hasil parse blok
      */
-    private function parseBlock(array $allRows, int $psaIdx, Carbon $windowStart, Carbon $windowEnd): array
+    private function parseBlock(array $allRows, int $psaIdx): array
     {
         $records = [];
 
-        // Validasi ketersediaan semua baris blok
+        // Validasi ketersediaan semua baris blok (minimal s/d +5)
         if (!isset($allRows[$psaIdx + 5])) {
             Log::debug("Block di row " . ($psaIdx + 1) . " tidak lengkap, skip.");
             return [];
         }
 
-        // +1: YNA Part Description (col I = index 8)
-        $descRow     = $allRows[$psaIdx + 1];
-        $partNumber  = $this->cleanString($descRow[8] ?? null);
+        // ── +1: ambil part number ────────────────────────────────────────
+        $descRow    = $allRows[$psaIdx + 1];
 
-        // Validasi: pastikan ini benar-benar row YNA Part Description
-        $descLabel = $this->cleanString($descRow[7] ?? null); // col H
-        if ($descLabel !== 'YNA Part Description' || empty($partNumber)) {
-            Log::debug("Block row " . ($psaIdx + 1) . ": bukan YNA Part Description atau part kosong. H='{$descLabel}' I='{$partNumber}'");
+        // BUG FIX: validasi menggunakan col F (idx 5) = 'YNA Part#', BUKAN col H
+        // Col H (idx 7) berisi deskripsi bebas part, bukan teks literal 'YNA Part Description'
+        $partLabel  = $this->cleanString($descRow[5] ?? null); // col F = label baris
+        $partNumber = $this->cleanString($descRow[8] ?? null); // col I = nilai part number
+
+        if ($partLabel !== 'YNA Part#') {
+            Log::debug("Block row " . ($psaIdx + 1) . ": label +1 bukan 'YNA Part#', got '{$partLabel}', skip.");
             return [];
         }
 
-        // +3: ETD Date row (col I = 'ETD Date', col J+ = tanggal ETD)
-        $etdRow      = $allRows[$psaIdx + 3];
-        $etdLabel    = $this->cleanString($etdRow[8] ?? null); // col I
+        if (empty($partNumber)) {
+            Log::debug("Block row " . ($psaIdx + 1) . ": part number kosong di col I, skip.");
+            return [];
+        }
 
-        // +4: ETA Date row (col I = 'ETA Date', col J+ = tanggal ETA)
-        $etaRow      = $allRows[$psaIdx + 4];
-        $etaLabel    = $this->cleanString($etaRow[8] ?? null); // col I
+        // ── +3: ETD Date row ─────────────────────────────────────────────
+        $etdRow   = $allRows[$psaIdx + 3];
+        $etdLabel = $this->cleanString($etdRow[8] ?? null); // col I
 
-        // +5: Net row (col I = 'Net', col J+ = qty)
-        $netRow      = $allRows[$psaIdx + 5];
-        $netLabel    = $this->cleanString($netRow[8] ?? null); // col I
+        // ── +4: ETA Date row ─────────────────────────────────────────────
+        $etaRow   = $allRows[$psaIdx + 4];
+        $etaLabel = $this->cleanString($etaRow[8] ?? null); // col I
 
-        // Validasi label
+        // ── +5: Net (qty) row ─────────────────────────────────────────────
+        $netRow   = $allRows[$psaIdx + 5];
+        $netLabel = $this->cleanString($netRow[8] ?? null); // col I
+
+        // Validasi label ETD — wajib ada
         if ($etdLabel !== 'ETD Date') {
-            Log::warning("Block row " . ($psaIdx + 1) . ": ETD label tidak cocok, expected 'ETD Date' got '{$etdLabel}'");
+            Log::warning("Block row " . ($psaIdx + 1) . " part '{$partNumber}': ETD label tidak cocok, expected 'ETD Date' got '{$etdLabel}'");
             return [];
         }
 
+        // Validasi label Net — wajib ada
         if ($netLabel !== 'Net') {
-            Log::warning("Block row " . ($psaIdx + 1) . ": Net label tidak cocok, expected 'Net' got '{$netLabel}'");
+            Log::warning("Block row " . ($psaIdx + 1) . " part '{$partNumber}': Net label tidak cocok, expected 'Net' got '{$netLabel}'");
             return [];
         }
 
-        // Tentukan jumlah kolom data
-        $maxCols = max(count($etdRow), count($netRow));
+        // ETA label boleh tidak ada (akan fallback)
+        $hasEtaRow = ($etaLabel === 'ETA Date');
+
+        // ── Loop kolom data ───────────────────────────────────────────────
+        $maxCols = max(count($etdRow), count($etaRow), count($netRow));
 
         for ($colIdx = self::DATA_COL_START; $colIdx < $maxCols; $colIdx++) {
-            // Qty
-            $qtyRaw = $netRow[$colIdx] ?? null;
-            if ($qtyRaw === null || $qtyRaw === '' || $qtyRaw === '               ') continue;
 
-            // Skip formula string
-            if (is_string($qtyRaw) && str_starts_with(trim($qtyRaw), '=')) continue;
-
-            $qty = $this->parseInteger($qtyRaw);
-            if ($qty === null || $qty <= 0) continue;
-
-            // ETD
+            // ETD — wajib ada, skip kolom jika kosong
             $etdRaw = $etdRow[$colIdx] ?? null;
             $etd    = $this->parseDateValue($etdRaw);
-            if ($etd === null) continue; // ETD wajib ada
+            if ($etd === null) {
+                continue;
+            }
 
-            // ETA — fallback ke ETD + 42 hari jika kosong
-            $etaRaw = ($etaLabel === 'ETA Date') ? ($etaRow[$colIdx] ?? null) : null;
-            $eta    = $this->parseDateValue($etaRaw) ?? $etd->copy()->addDays(self::ETA_FALLBACK_DAYS);
+            // ETA — fallback ke ETD + 42 hari jika baris ETA tidak ada atau nilai kosong
+            $etaRaw = $hasEtaRow ? ($etaRow[$colIdx] ?? null) : null;
+            $eta    = $this->parseDateValue($etaRaw)
+                      ?? $etd->copy()->addDays(self::ETA_FALLBACK_DAYS);
 
-            // Window filter berdasarkan ETA
-            if (!$eta->between($windowStart, $windowEnd)) {
+            // Qty
+            $qtyRaw = $netRow[$colIdx] ?? null;
+
+            // Skip kolom jika formula string (belum terhitung)
+            if (is_string($qtyRaw) && str_starts_with(trim($qtyRaw), '=')) {
+                Log::debug("Block row " . ($psaIdx + 1) . " col " . ($colIdx + 1) . ": qty masih formula, skip.");
+                continue;
+            }
+
+            // Nilai kosong / spasi → qty = 0
+            if ($qtyRaw === null || $qtyRaw === '' || (is_string($qtyRaw) && trim($qtyRaw) === '')) {
+                $qty = 0;
+            } else {
+                $qty = $this->parseInteger($qtyRaw) ?? 0;
+            }
+
+            // Skip nilai negatif (data tidak valid / adjustment row)
+            if ($qty < 0) {
+                Log::debug("Block row " . ($psaIdx + 1) . " col " . ($colIdx + 1) . ": qty negatif ({$qty}), skip.");
                 continue;
             }
 
@@ -264,6 +290,10 @@ class YNAMapper implements SRMapperInterface
             ];
         }
 
+        if (!empty($records)) {
+            Log::debug("Block row " . ($psaIdx + 1) . " part '{$partNumber}': " . count($records) . " kolom parsed.");
+        }
+
         return $records;
     }
 
@@ -272,7 +302,7 @@ class YNAMapper implements SRMapperInterface
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * Temukan semua index baris yang merupakan anchor PSA# (F='PSA#').
+     * Temukan semua index baris yang merupakan anchor PSA# (col F = 'PSA#').
      */
     private function findPsaRows(array $allRows): array
     {
@@ -292,42 +322,54 @@ class YNAMapper implements SRMapperInterface
 
     private function parseDateValue($value): ?Carbon
     {
-        if ($value === null || $value === '') return null;
+        if ($value === null || $value === '') {
+            return null;
+        }
 
-        // PhpSpreadsheet sudah mengembalikan DateTime object jika getCalculatedValue()
+        // PhpSpreadsheet mengembalikan DateTime object jika getCalculatedValue()
         if ($value instanceof \DateTime || $value instanceof \DateTimeImmutable) {
             return Carbon::instance($value)->startOfDay();
         }
 
-        // Excel serial number
+        // Excel serial number (float atau int > 40000)
         if (is_float($value) || (is_int($value) && $value > 40000)) {
             try {
                 $dt = ExcelDate::excelToDateTimeObject($value);
                 return Carbon::instance($dt)->startOfDay();
             } catch (\Throwable $e) {
-                // fall through
+                // fall through ke string parsing
             }
         }
 
         // String tanggal
         if (is_string($value)) {
             $value = trim($value);
-            if (empty($value) || str_starts_with($value, '=') || $value === '               ') {
+
+            // Skip formula string, blank-ish string
+            if (empty($value) || str_starts_with($value, '=')) {
                 return null;
             }
 
-            $formats = ['Y-m-d', 'Y/m/d', 'd/m/Y', 'm/d/Y', 'd-m-Y'];
+            $formats = ['Y-m-d', 'Y/m/d', 'd/m/Y', 'm/d/Y', 'd-m-Y', 'n/j/Y', 'n/j/y'];
             foreach ($formats as $fmt) {
                 try {
+                    // BUG FIX: Carbon::createFromFormat bisa return false, bukan null/throw
                     $d = Carbon::createFromFormat($fmt, $value);
-                    if ($d) return $d->startOfDay();
+                    if ($d !== false && $d->format($fmt) === $value) {
+                        return $d->startOfDay();
+                    }
                 } catch (\Throwable $e) {
-                    // try next
+                    // try next format
                 }
             }
 
+            // Last resort: Carbon::parse (sangat fleksibel tapi kurang strict)
             try {
-                return Carbon::parse($value)->startOfDay();
+                $parsed = Carbon::parse($value);
+                // Sanity check: tahun harus masuk akal
+                if ($parsed->year >= 2000 && $parsed->year <= 2100) {
+                    return $parsed->startOfDay();
+                }
             } catch (\Throwable $e) {
                 // ignore
             }

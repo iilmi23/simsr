@@ -6,6 +6,7 @@ export default function Dashboard({ stats, recent_customers, recent_sr, error })
     const user = usePage().props.auth.user;
     const roleName = {
         admin: 'Admin',
+        staff: 'PPC Staff',
         ppc_staff: 'PPC Staff',
         ppc_supervisor: 'PPC Supervisor',
         ppc_manager: 'PPC Manager',

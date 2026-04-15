@@ -28,6 +28,7 @@ class SummaryListExport implements FromArray, WithHeadings, WithStyles
             return [
                 $index + 1,
                 $item->source_file,
+                $item->sheet_name ?? '-',
                 $item->customer,
                 $item->port,
                 $item->total_items,
@@ -42,6 +43,7 @@ class SummaryListExport implements FromArray, WithHeadings, WithStyles
         return [
             'No',
             'Source File',
+            'Sheet Name',
             'Customer',
             'Port',
             'Total Items',

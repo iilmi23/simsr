@@ -9,6 +9,10 @@ use App\Models\Customer;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\SummaryExport;
 use App\Exports\SummaryListExport;
+use App\Exports\YNAExport;
+use App\Exports\YCExport;
+use App\Exports\TYCExport;
+use App\Exports\SAIExport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -58,6 +62,7 @@ class SummaryController extends Controller
                 port,
                 source_file,
                 upload_batch,
+                MIN(sheet_name)   as sheet_name,
                 MIN(created_at)   as upload_date,
                 COUNT(*)          as total_items,
                 SUM(qty)          as total_qty,
@@ -69,7 +74,7 @@ class SummaryController extends Controller
                 MIN(etd)          as earliest_etd,
                 MAX(etd)          as latest_etd
             ')
-            ->groupBy('customer', 'port', 'source_file', 'upload_batch')
+            ->groupBy('customer', 'port', 'source_file', 'upload_batch', 'sheet_name')
             ->orderByRaw('MIN(created_at) desc')
             ->get();
 
@@ -113,6 +118,7 @@ class SummaryController extends Controller
                 'customer'    => $sr->customer,
                 'port'        => $sr->port,
                 'month'       => $sr->month,
+                'sheet_name'  => $sr->sheet_name,
                 'upload_date' => $sr->created_at->format('Y-m-d H:i:s'),
             ],
             'data' => $summaryData,
@@ -144,6 +150,7 @@ class SummaryController extends Controller
                     'source_file'  => $sr->source_file,
                     'customer'     => $sr->customer,
                     'port'         => $sr->port,
+                    'sheet_name'   => $sr->sheet_name,
                     'upload_date'  => $sr->created_at->format('Y-m-d H:i:s'),
                 ],
                 'summary' => [
@@ -206,8 +213,18 @@ class SummaryController extends Controller
                 ->get();
 
             $filename = Str::slug(pathinfo($sr->source_file, PATHINFO_FILENAME)) ?: $sr->id;
+            
+            // Pilih export class berdasarkan customer
+            $exportClass = match(strtoupper($sr->customer ?? '')) {
+                'YNA'   => YNAExport::class,
+                'YC'    => YCExport::class,
+                'TYC'   => TYCExport::class,
+                'SAI'   => SAIExport::class,
+                default => SummaryExport::class,
+            };
+            
             return Excel::download(
-                new SummaryExport($summaryData, $sr),
+                new $exportClass($summaryData),
                 "Summary_{$filename}_Detail.xlsx"
             );
         } catch (\Exception $e) {
@@ -259,6 +276,7 @@ class SummaryController extends Controller
                 port,
                 source_file,
                 upload_batch,
+                MIN(sheet_name)   as sheet_name,
                 MIN(created_at)   as upload_date,
                 COUNT(*)          as total_items,
                 SUM(qty)          as total_qty,
@@ -266,7 +284,7 @@ class SummaryController extends Controller
                 SUM(CASE WHEN order_type = \'FORECAST\' THEN qty ELSE 0 END) as forecast_qty,
                 COUNT(DISTINCT part_number)                                   as unique_parts
             ')
-            ->groupBy('customer', 'port', 'source_file', 'upload_batch')
+            ->groupBy('customer', 'port', 'source_file', 'upload_batch', 'sheet_name')
             ->orderByRaw('MIN(created_at) desc')
             ->get();
 

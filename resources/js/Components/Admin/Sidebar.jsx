@@ -29,7 +29,7 @@ const Icons = {
                 d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     ),
-    CarLine: () => (
+    Time Chart: () => (
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
                 d="M8 17H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3m-6 0h6m-6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
@@ -89,7 +89,7 @@ const MENU_SECTIONS = [
                 name: 'Dashboard',
                 icon: 'Dashboard',
                 route: 'dashboard',
-                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+                roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
             {
                 name: 'Master Data',
@@ -109,9 +109,9 @@ const MENU_SECTIONS = [
                         roles: ['admin'],
                     },
                     {
-                        name: 'Car Line',
-                        icon: 'CarLine',
-                        route: 'carline',
+                        name: 'Time Chart',
+                        icon: 'timechart',
+                        route: 'timechart',
                         roles: ['admin'],
                     },
                 ],
@@ -125,25 +125,25 @@ const MENU_SECTIONS = [
                 name: 'Upload SR',
                 icon: 'UploadSR',
                 route: 'sr.upload.page',
-                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+                roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
             {
                 name: 'Summary',
                 icon: 'Summary',
                 route: 'summary.index',
-                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+                roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
             {
                 name: 'SPP',
                 icon: 'SPP',
                 route: 'spp',
-                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+                roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
             {
                 name: 'History',
                 icon: 'History',
                 route: 'history',
-                roles: ['admin', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
+                roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
         ],
     },
@@ -214,8 +214,14 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     const [activeMenu, setActiveMenu] = useState('Dashboard');
     const [openSubmenu, setOpenSubmenu] = useState(null);
     const [hovered, setHovered] = useState(null);
-    const user = usePage().props.auth.user;
-    const role = user?.role ?? 'ppc_staff';
+    const user = usePage().props.auth?.user;
+
+    // Guard: Jika user undefined (belum login atau auth tidak ter-share), jangan render sidebar
+    if (!user) {
+        return null;
+    }
+
+    const role = user.role ?? 'staff';
 
     const filterItemsByRole = (items, currentRole) => {
         return items

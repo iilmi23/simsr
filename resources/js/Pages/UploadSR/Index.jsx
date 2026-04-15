@@ -89,7 +89,9 @@ export default function Index() {
     };
 
     const handleSubmit = () => {
-        if (!selectedCustomer || !file || selectedSheet === "" || Number.isNaN(selectedSheet)) {
+        const sheetValue = selectedSheet;
+
+        if (!selectedCustomer || !file || sheetValue === "" || Number.isNaN(sheetValue)) {
             alert("Please complete all fields including sheet");
             return;
         }
@@ -98,15 +100,23 @@ export default function Index() {
         formData.append("customer", selectedCustomer);
         formData.append("port", selectedPort);
         formData.append("file", file);
-        formData.append("sheet", selectedSheet);
+        formData.append("sheet", sheetValue);
 
         setLoading(true);
 
-        router.post(route("sr.upload"), formData, {
+        // Create upload promise with timeout
+        const uploadPromise = router.post(route("sr.upload"), formData, {
             forceFormData: true,
             preserveScroll: true,
+        });
 
-            onSuccess: () => {
+        // Set timeout for upload (5 minutes)
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Upload timeout - please try again')), 300000);
+        });
+
+        Promise.race([uploadPromise, timeoutPromise])
+            .then(() => {
                 setLoading(false);
                 setSelectedCustomer("");
                 setSrNumber("");
@@ -115,17 +125,24 @@ export default function Index() {
                 setWorkbook(null);
                 setSheets([]);
                 setSelectedSheet("");
-            },
-
-            onError: (err) => {
-                console.error("ERROR DETAIL:", err);
-                alert(JSON.stringify(err, null, 2));
-            },
-
-            onFinish: () => {
+            })
+            .catch((err) => {
                 setLoading(false);
-            }
-        });
+                console.error("Upload error:", err);
+                
+                // Handle timeout
+                if (err.message?.includes('timeout')) {
+                    alert("❌ Upload timed out. Please try again or contact administrator.");
+                    return;
+                }
+                
+                // Handle other errors
+                if (!err || typeof err !== 'object' || Object.keys(err).length === 0) {
+                    alert("❌ Upload gagal. Silakan coba lagi atau hubungi administrator.");
+                } else {
+                    alert("❌ Upload gagal:\n\n" + JSON.stringify(err, null, 2));
+                }
+            });
     };
 
     const toggleFullscreen = () => {
@@ -328,6 +345,11 @@ export default function Index() {
                                                     </option>
                                                 ))}
                                             </select>
+                                            {selectedCustomerData?.code === 'YC' && (
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    For YC files, only the selected sheet will be mapped and uploaded. Choose the correct sheet name before submitting.
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
