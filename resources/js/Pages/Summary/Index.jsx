@@ -13,18 +13,23 @@ import {
 export default function SummaryIndex({ srList, customers, filters, flash }) {
     const [customer, setCustomer] = useState(filters.customer || "");
     const [search, setSearch] = useState(filters.search || "");
-    const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-    const [successMessage, setSuccessMessage] = useState("");
+    const [notification, setNotification] = useState({ type: null, message: "" });
     const [deleteTarget, setDeleteTarget] = useState(null);
 
-    // Check for flash success message from server
+    // Check for flash notifications from server
     useEffect(() => {
-        if (flash && flash.success) {
-            setSuccessMessage(flash.success);
-            setShowSuccessNotification(true);
-            const timer = setTimeout(() => {
-                setShowSuccessNotification(false);
-            }, 3000);
+        const message = flash?.success || flash?.warning || flash?.error;
+        const type = flash?.success
+            ? "success"
+            : flash?.warning
+            ? "warning"
+            : flash?.error
+            ? "error"
+            : null;
+
+        if (message && type) {
+            setNotification({ type, message });
+            const timer = setTimeout(() => setNotification({ type: null, message: "" }), 5000);
             return () => clearTimeout(timer);
         }
     }, [flash]);
@@ -60,10 +65,9 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
             preserveState: false,
             preserveScroll: true,
             onSuccess: () => {
-                setSuccessMessage("SR upload successfully deleted!");
-                setShowSuccessNotification(true);
+                setNotification({ type: 'success', message: 'SR upload successfully deleted!' });
                 setTimeout(() => {
-                    setShowSuccessNotification(false);
+                    setNotification({ type: null, message: '' });
                 }, 3000);
             }
         });
@@ -76,7 +80,7 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
     };
 
     const closeNotification = () => {
-        setShowSuccessNotification(false);
+        setNotification({ type: null, message: '' });
     };
 
     const deleteRecord = deleteTarget ? srList.find((sr) => sr.id === deleteTarget) : null;
@@ -84,19 +88,31 @@ export default function SummaryIndex({ srList, customers, filters, flash }) {
     return (
         <AdminLayout title="Summary">
             <div className="min-h-screen bg-gray-50/40 pt-2 pb-8 px-5 md:px-8 font-sans">
-                {/* Success Notification */}
-                {showSuccessNotification && (
+                {/* Notification */}
+                {notification.message && (
                     <div className="fixed top-4 right-4 z-50 animate-slide-in">
-                        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl shadow-lg p-4 min-w-[300px]">
+                        <div className={`flex items-center gap-3 rounded-xl shadow-lg p-4 min-w-[300px] ${
+                            notification.type === "success"
+                                ? "bg-green-50 border border-green-200 text-green-800"
+                                : notification.type === "warning"
+                                ? "bg-amber-50 border border-amber-200 text-amber-800"
+                                : "bg-red-50 border border-red-200 text-red-800"
+                        }`}>
                             <div className="flex-shrink-0">
-                                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                                <CheckCircleIcon className={`w-6 h-6 ${
+                                    notification.type === "success"
+                                        ? "text-green-600"
+                                        : notification.type === "warning"
+                                        ? "text-amber-600"
+                                        : "text-red-600"
+                                }`} />
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-medium text-green-800">{successMessage}</p>
+                                <p className="text-sm font-medium">{notification.message}</p>
                             </div>
                             <button
-                                onClick={closeNotification}
-                                className="flex-shrink-0 text-green-600 hover:text-green-800 transition-colors"
+                                onClick={() => setNotification({ type: null, message: "" })}
+                                className="flex-shrink-0 transition-colors hover:opacity-80"
                             >
                                 <XMarkIcon className="w-5 h-5" />
                             </button>

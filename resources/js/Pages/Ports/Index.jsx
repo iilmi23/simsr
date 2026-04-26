@@ -30,7 +30,7 @@ export default function Index({ customer, ports, flash = {} }) {
     const processedPorts = useMemo(() => {
         let filtered = ports.filter(p =>
             p.name.toLowerCase().includes(search.toLowerCase()) ||
-            (p.keterangan || "").toLowerCase().includes(search.toLowerCase())
+            (p.description || "").toLowerCase().includes(search.toLowerCase())
         );
 
         filtered.sort((a, b) => {
@@ -157,7 +157,7 @@ export default function Index({ customer, ports, flash = {} }) {
                                                 {port.name}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
-                                                {port.keterangan || "—"}
+                                                {port.description || "—"}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-2">

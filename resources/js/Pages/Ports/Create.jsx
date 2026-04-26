@@ -6,7 +6,7 @@ export default function Create({ customer }) {
 
     const { data, setData, post, processing, errors } = useForm({
         name: "",
-        keterangan: ""
+        description: ""
     });
 
     const submit = (e) => {
@@ -65,8 +65,8 @@ export default function Create({ customer }) {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                             <textarea
                                 rows="4"
-                                value={data.keterangan}
-                                onChange={(e) => setData("keterangan", e.target.value)}
+                                value={data.description}
+                                onChange={(e) => setData("description", e.target.value)}
                                 placeholder="Enter description"
                                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1D6F42]/20 focus:border-[#1D6F42]"
                             />

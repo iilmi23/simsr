@@ -7,12 +7,15 @@ use Illuminate\Http\UploadedFile;
 use App\Models\SR;
 use App\Models\SPP;
 use App\Models\Customer;
+use App\Models\Assy;
 use App\Services\SR\TYCMapper;
 use App\Services\SR\YNAMapper;
 use App\Services\SR\SAIMapper;
 use App\Services\SR\YCMapper;
 use App\Services\SR\SRMapperInterface;
-use Maatwebsite\Excel\Facades\Excel;
+use App\Services\WeekGenerator;
+use App\Models\ProductionWeek;
+use App\Models\EtdMapping;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use Inertia\Inertia;
@@ -20,6 +23,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class SRController extends Controller
 {
@@ -33,6 +37,7 @@ class SRController extends Controller
             'customers' => Customer::with(['ports' => function ($q) {
                 $q->select('id', 'customer_id', 'name');
             }])->select('id', 'code', 'name')->get(),
+            'carlines' => \App\Models\CarLine::select('id', 'code', 'description')->orderBy('code')->get(),
             'flash' => session('success') ? ['success' => session('success')] : null,
         ]);
     }
@@ -54,11 +59,7 @@ class SRController extends Controller
         $sheetIndex = (int) $request->sheet;
 
         try {
-            // 1. Simpan ke disk agar path stabil untuk IOFactory
             $tempPath = $this->storeTempFile($request->file('file'));
-
-            // 2. Baca sheet array dengan PhpSpreadsheet Reader (memory-efficient)
-            // Menggunakan Reader langsung untuk menghindari memory exhaustion
             $reader = $this->createReader($tempPath);
             $spreadsheet = $reader->load($tempPath);
             $worksheet = $spreadsheet->getSheet($sheetIndex);
@@ -70,25 +71,9 @@ class SRController extends Controller
                 ], 400);
             }
 
-            // Convert to array dengan format yang konsisten (0-based index)
-            $sheetData = [];
-            $highestRow = $worksheet->getHighestRow();
-            $highestCol = $worksheet->getHighestColumn();
-
-            // Convert letter column to number
-            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
-
-            for ($row = 1; $row <= $highestRow; $row++) {
-                $rowData = [];
-                for ($col = 1; $col <= $highestColIndex; $col++) {
-                    $cellValue = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
-                    $rowData[] = $cellValue;
-                }
-                $sheetData[$row - 1] = $rowData;  // Convert to 0-based
-            }
-
-            $customer  = Customer::findOrFail($request->customer);
-            $mapper    = $this->resolveMapper($customer->code);
+            $sheetData = $this->worksheetToArray($worksheet);
+            $customer = Customer::findOrFail($request->customer);
+            $mapper = $this->resolveMapper($customer->code);
 
             if ($mapper === null) {
                 return response()->json([
@@ -97,26 +82,32 @@ class SRController extends Controller
                 ], 400);
             }
 
-            // 3. Ekstrak hidden columns/rows via IOFactory (dipakai TYC & SAI)
             $options = $this->extractSheetOptions($tempPath, $sheetIndex, $customer->code);
-
-            // 4. Map — semua mapper baru pakai signature seragam: map($sheet, $ref, $options)
             $mapped = $this->runMapper($mapper, $customer->code, $sheetData, $tempPath, $sheetIndex, $options);
             $mapped = array_values(array_filter($mapped));
 
             if (empty($mapped)) {
                 return response()->json([
                     'success' => false,
-                    'error'   => 'Mapping gagal: tidak ada data valid. Total baris sheet: ' . count($sheetData),
+                    'error'   => 'Mapping gagal: tidak ada data valid.',
                 ], 400);
             }
 
-            $firmCount        = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FIRM'));
-            $forecastCount    = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FORECAST'));
-            $uniqueParts      = count(array_unique(array_column($mapped, 'part_number')));
-            $totalFirmQty     = array_sum(array_column(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FIRM'), 'qty'));
+            // Cek part yang belum ada di master assy
+            $unknownParts = [];
+            foreach ($mapped as $item) {
+                $assy = Assy::where('part_number', $item['part_number'])->first();
+                if (!$assy && !in_array($item['part_number'], $unknownParts)) {
+                    $unknownParts[] = $item['part_number'];
+                }
+            }
+
+            $firmCount = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FIRM'));
+            $forecastCount = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FORECAST'));
+            $uniqueParts = count(array_unique(array_column($mapped, 'part_number')));
+            $totalFirmQty = array_sum(array_column(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FIRM'), 'qty'));
             $totalForecastQty = array_sum(array_column(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FORECAST'), 'qty'));
-            $monthsCovered    = array_values(array_unique(array_column($mapped, 'month')));
+            $monthsCovered = array_values(array_unique(array_column($mapped, 'month')));
             sort($monthsCovered);
 
             return response()->json([
@@ -129,8 +120,9 @@ class SRController extends Controller
                     'total_firm_qty'     => $totalFirmQty,
                     'total_forecast_qty' => $totalForecastQty,
                     'months_covered'     => $monthsCovered,
+                    'unknown_parts'      => $unknownParts,
+                    'has_unknown_parts'  => count($unknownParts) > 0,
                     'preview'            => array_slice($mapped, 0, 50),
-                    'sample_mapping'     => $mapped[0] ?? null,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -148,169 +140,191 @@ class SRController extends Controller
     public function uploadTaiwan(Request $request)
     {
         $request->validate([
-            'file'     => 'required|file|mimes:xlsx,xls,xlsm|max:51200',
-            'sheet'    => 'required|integer|min:0',
-            'customer' => 'required|exists:customers,id',
-            'port'     => 'nullable|exists:ports,id',
+            'file'       => 'required|file|mimes:xlsx,xls,xlsm|max:51200',
+            'sheet'      => 'required|integer|min:0',
+            'customer'   => 'required|exists:customers,id',
+            'port'       => 'nullable|exists:ports,id',
+            'carline_id' => 'nullable|exists:carline,id',
         ]);
 
         $tempPath   = null;
         $sheetIndex = (int) $request->sheet;
 
         try {
-            // 1. Simpan ke disk agar path stabil
-            $tempPath     = $this->storeTempFile($request->file('file'));
+            $tempPath = $this->storeTempFile($request->file('file'));
             $originalName = $request->file('file')->getClientOriginalName();
+            $customerId = $request->customer;
+            $customerCode = Customer::find($customerId)->code;
 
             Log::info('SR Upload dimulai', [
                 'file'      => $originalName,
-                'customer'  => $request->customer,
+                'customer'  => $customerId,
                 'sheet'     => $sheetIndex,
-                'temp_path' => $tempPath,
             ]);
 
-            // 2. Baca sheet array dengan PhpSpreadsheet Reader (memory-efficient)
             $reader = $this->createReader($tempPath);
             $spreadsheet = $reader->load($tempPath);
             $worksheet = $spreadsheet->getSheet($sheetIndex);
 
             if ($worksheet === null) {
-                return redirect()->back()->with(
-                    'error',
-                    '❌ Sheet tidak valid. Tersedia: ' . $spreadsheet->getSheetCount() . ' sheet.'
-                );
+                return redirect()->back()->with('error', '❌ Sheet tidak valid.');
             }
 
             $sheetName = $worksheet->getTitle();
-
-            // Convert to array dengan format yang konsisten (0-based index)
-            $sheetData = [];
-            $highestRow = $worksheet->getHighestRow();
-            $highestCol = $worksheet->getHighestColumn();
-
-            // Convert letter column to number
-            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
-
-            for ($row = 1; $row <= $highestRow; $row++) {
-                $rowData = [];
-                for ($col = 1; $col <= $highestColIndex; $col++) {
-                    $cellValue = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
-                    $rowData[] = $cellValue;
-                }
-                $sheetData[$row - 1] = $rowData;  // Convert to 0-based
-            }
+            $sheetData = $this->worksheetToArray($worksheet);
 
             if (empty($sheetData)) {
                 return redirect()->back()->with('error', '❌ Sheet yang dipilih kosong.');
             }
 
-            // 3. Validasi customer & port
-            $customer = Customer::findOrFail($request->customer);
+            // Validasi customer & port
+            $customer = Customer::findOrFail($customerId);
             $portName = null;
 
             if ($customer->ports()->exists()) {
                 if (!$request->filled('port')) {
-                    return redirect()->back()->with(
-                        'error',
-                        '❌ Port wajib diisi untuk customer ' . $customer->name . '.'
-                    );
+                    return redirect()->back()->with('error', '❌ Port wajib diisi untuk customer ' . $customer->name . '.');
                 }
-                $port     = $customer->ports()->findOrFail($request->port);
+                $port = $customer->ports()->findOrFail($request->port);
                 $portName = $port->name;
             }
 
-            // 4. Resolve mapper
+            // Resolve mapper
             $mapper = $this->resolveMapper($customer->code);
-
             if ($mapper === null) {
-                return redirect()->back()->with(
-                    'error',
-                    '❌ Customer ' . $customer->code . ' belum didukung. Didukung: TYC, YNA, SAI, YC.'
-                );
+                return redirect()->back()->with('error', '❌ Customer ' . $customer->code . ' belum didukung.');
             }
 
-            // 5. Ekstrak hidden columns/rows via IOFactory
             $options = $this->extractSheetOptions($tempPath, $sheetIndex, $customer->code);
 
-            Log::info('Mapping dimulai', [
-                'customer'       => $customer->code,
-                'sheet_index'    => $sheetIndex,
-                'rows'           => count($sheetData),
-                'hidden_columns' => $options['hidden_columns'],
-                'hidden_rows'    => $options['hidden_rows'],
-            ]);
+            if (strtoupper($customer->code) === 'YNA' && method_exists($mapper, 'extractEtdRangeFromFile')) {
+                try {
+                    [$minEtd, $maxEtd] = $mapper->extractEtdRangeFromFile($tempPath);
+                    if (!empty($minEtd) && !empty($maxEtd)) {
+                        WeekGenerator::generateFromDateRange($customerId, $minEtd, $maxEtd);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('YNA week generation failed: ' . $e->getMessage());
+                }
+            }
 
-            // 6. Map
-            $uploadBatches = [];
+            // Mapping data
             if (strtoupper($customer->code) === 'YC') {
                 $mapped = $this->runYCMapper($mapper, $tempPath, $options, true, $sheetIndex);
                 $mapped = array_values(array_filter($mapped));
-
-                if (empty($mapped)) {
-                    return redirect()->back()->with(
-                        'error',
-                        '❌ Mapping gagal: tidak ada data valid untuk sheet YC. ' .
-                            'Periksa format file untuk customer ' . $customer->name . '.'
-                    );
-                }
-
-                $now         = now();
-                $uploadBatch = Str::uuid()->toString();
-                $uploadBatches[] = $uploadBatch;
-
-                foreach ($mapped as &$item) {
-                    $item['source_file']  = $originalName;
-                    $item['upload_batch'] = $uploadBatch;
-                    $item['sheet_index']  = $sheetIndex;
-                    $item['sheet_name']   = $sheetName;
-                    $item['port']         = $portName ?? ($item['port'] ?? null);
-                    $item['customer']     = $customer->code;
-                    $item['created_at']   = $now;
-                    $item['updated_at']   = $now;
-                }
-                unset($item);
             } else {
-                $mapped = $this->runMapper($mapper, $customer->code, $sheetData, $tempPath, $sheetIndex, $options);
+                $mapped = $this->runMapper($mapper, $customer->code, $sheetData, $tempPath, $sheetIndex, $options, $customerId);
                 $mapped = array_values(array_filter($mapped));
-
-                if (empty($mapped)) {
-                    return redirect()->back()->with(
-                        'error',
-                        '❌ Mapping gagal: tidak ada data valid. ' .
-                            'Periksa format file untuk customer ' . $customer->name . '.'
-                    );
-                }
-
-                // 7. Tambah metadata
-                $now         = now();
-                $uploadBatch = Str::uuid()->toString();
-                $uploadBatches[] = $uploadBatch;
-
-                foreach ($mapped as &$item) {
-                    $item['source_file']  = $originalName;
-                    $item['upload_batch'] = $uploadBatch;
-                    $item['sheet_index']  = $sheetIndex;
-                    $item['sheet_name']   = $sheetName;
-                    $item['port']         = $portName ?? ($item['port'] ?? null);
-                    $item['customer']     = $customer->code;
-                    $item['created_at']   = $now;
-                    $item['updated_at']   = $now;
-                }
-                unset($item);
             }
 
             if (empty($mapped)) {
-                return redirect()->back()->with(
-                    'error',
-                    '❌ Mapping gagal: tidak ada data valid. ' .
-                        'Periksa format file untuk customer ' . $customer->name . '.'
-                );
+                return redirect()->back()->with('error', '❌ Mapping gagal: tidak ada data valid.');
             }
 
-            Log::info('Mapping selesai', ['records' => count($mapped)]);
-            $sppRows = $this->buildSppRecords($mapped, $now);
+            // ==================== AUTO-GENERATE WEEKS & ETD MAPPING ====================
+            // 1. Extract semua ETD dari hasil mapping
+            $etdDates = [];
+            foreach ($mapped as $item) {
+                if (!empty($item['etd'])) {
+                    $etdDates[] = $item['etd'];
+                }
+            }
 
-            // 8. Insert ke DB
+            // 2. Generate production weeks dari range ETD
+            if (!empty($etdDates)) {
+                $minEtd = min($etdDates);
+                $maxEtd = max($etdDates);
+                WeekGenerator::generateFromDateRange($customerId, $minEtd, $maxEtd);
+                Log::info("Generated production weeks for range: {$minEtd} to {$maxEtd}");
+            }
+
+            // 3. Resolve mapping ETD ke week untuk setiap item
+            // Gunakan week dari mapper jika sudah ada, fallback ke ProductionWeek resolve
+            foreach ($mapped as &$item) {
+                if (!empty($item['etd'])) {
+                    // Jika mapper sudah provide week number, gunakan itu
+                    if (!empty($item['week'])) {
+                        // Week sudah dari mapper, tinggal resolve month/year jika perlu
+                        $weekId = WeekGenerator::resolveEtdMapping($customerId, $item['etd']);
+                        if ($weekId) {
+                            $week = ProductionWeek::find($weekId);
+                            if ($week && !$item['month']) {
+                                $item['month'] = $week->month_name;
+                                $item['year'] = $week->year;
+                            }
+                        }
+                    } else {
+                        // Resolve dari ProductionWeek berdasarkan ETD
+                        $weekId = WeekGenerator::resolveEtdMapping($customerId, $item['etd']);
+                        
+                        if ($weekId) {
+                            $week = ProductionWeek::find($weekId);
+                            if ($week) {
+                                $item['week'] = $week->week_no;
+                                $item['month'] = $week->month_name;
+                                $item['year'] = $week->year;
+                            }
+                        } else {
+                            // Fallback: hitung manual dari tanggal (tidak ideal tapi aman)
+                            $date = Carbon::parse($item['etd']);
+                            $item['week'] = ceil($date->day / 7);
+                            $item['month'] = strtoupper($date->shortMonthName);
+                            $item['year'] = $date->year;
+                            Log::warning("Week fallback untuk ETD {$item['etd']}: week={$item['week']}, month={$item['month']}");
+                        }
+                    }
+                }
+                
+                // ==================== MAPPING KE MASTER ASSY ====================
+                $assy = Assy::where('part_number', $item['part_number'])->first();
+                if ($assy) {
+                    $item['assy_id'] = $assy->id;
+                    $item['is_mapped'] = true;
+                    $item['mapping_error'] = null;
+                } else {
+                    // Auto-create missing part in master assy with safe defaults
+                    try {
+                        $newAssy = Assy::create([
+                            'carline_id'  => $request->carline_id ?? null,
+                            'part_number' => $item['part_number'],
+                            'assy_code'   => null,
+                            'level'       => null,
+                            'type'        => null,
+                            'umh'         => 0,
+                            'std_pack'    => 0,
+                            'is_active'   => true,
+                        ]);
+
+                        $item['assy_id'] = $newAssy->id;
+                        $item['is_mapped'] = true;
+                        $item['mapping_error'] = null;
+                    } catch (\Exception $e) {
+                        $item['assy_id'] = null;
+                        $item['is_mapped'] = false;
+                        $item['mapping_error'] = "Part number {$item['part_number']} tidak ditemukan dan gagal dibuat: " . $e->getMessage();
+                    }
+                }
+            }
+            unset($item);
+
+            // Tambah metadata
+            $now = now();
+            $uploadBatch = Str::uuid()->toString();
+
+            foreach ($mapped as &$item) {
+                $item['source_file'] = $originalName;
+                $item['upload_batch'] = $uploadBatch;
+                $item['sheet_index'] = $sheetIndex;
+                $item['sheet_name'] = $sheetName;
+                $item['port'] = $portName ?? ($item['port'] ?? null);
+                $item['carline_id'] = $request->carline_id ?? ($item['carline_id'] ?? null);
+                $item['customer'] = $customer->code;
+                $item['created_at'] = $now;
+                $item['updated_at'] = $now;
+            }
+            unset($item);
+
+            // Insert ke database
             DB::beginTransaction();
             try {
                 $insertedCount = 0;
@@ -319,35 +333,29 @@ class SRController extends Controller
                     $insertedCount += count($chunk);
                 }
 
-                if (!empty($sppRows)) {
-                    foreach (array_chunk($sppRows, 500) as $chunk) {
-                        SPP::insert($chunk);
-                    }
-                }
-
                 DB::commit();
             } catch (\Exception $e) {
                 DB::rollBack();
-                Log::error('DB insert gagal: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-                return redirect()->back()->with(
-                    'error',
-                    '❌ Gagal menyimpan ke database: ' . $e->getMessage()
-                );
+                Log::error('DB insert gagal: ' . $e->getMessage());
+                return redirect()->back()->with('error', '❌ Gagal menyimpan ke database: ' . $e->getMessage());
             }
 
-            $firmCount     = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FIRM'));
-            $forecastCount = count(array_filter($mapped, fn($i) => ($i['order_type'] ?? '') === 'FORECAST'));
-            $totalQty      = array_sum(array_column($mapped, 'qty'));
+            $mappedCount = count(array_filter($mapped, fn($i) => ($i['is_mapped'] ?? false) === true));
+            $unmappedCount = count(array_filter($mapped, fn($i) => ($i['is_mapped'] ?? false) === false));
+            $totalQty = array_sum(array_column($mapped, 'qty'));
 
             $message = sprintf(
-                '✅ Upload berhasil! Total records: %d (Firm: %d, Forecast: %d, Total Qty: %s)',
+                '✅ Upload berhasil! Total records: %d (Mapped: %d, Unmapped: %d, Total Qty: %s). Selanjutnya buka Summary untuk lihat batch terbaru.',
                 $insertedCount,
-                $firmCount,
-                $forecastCount,
+                $mappedCount,
+                $unmappedCount,
                 number_format($totalQty)
             );
 
-            Log::info($message, ['upload_batch' => $uploadBatches]);
+            if ($unmappedCount > 0) {
+                $message .= ' ⚠️ Ada part yang tidak dikenal. Buka Summary dan tambahkan part tersebut ke master assy.';
+                return redirect()->route('summary.index')->with('warning', $message);
+            }
 
             return redirect()->route('summary.index')->with('success', $message);
         } catch (\Exception $e) {
@@ -387,6 +395,8 @@ class SRController extends Controller
             'total_forecast' => SR::where('order_type', 'FORECAST')->count(),
             'total_qty'      => SR::sum('qty'),
             'unique_parts'   => SR::distinct('part_number')->count('part_number'),
+            'mapped_count'   => SR::where('is_mapped', true)->count(),
+            'unmapped_count' => SR::where('is_mapped', false)->count(),
         ];
 
         return Inertia::render('SR/Index', [
@@ -421,19 +431,53 @@ class SRController extends Controller
         }
     }
 
+    /**
+     * Remap part yang tidak dikenal
+     */
+    public function remap($id)
+    {
+        try {
+            $sr = SR::findOrFail($id);
+            $assy = assy::where('part_number', $sr->part_number)->first();
+            
+            if ($assy) {
+                $sr->update([
+                    'assy_id' => $assy->id,
+                    'is_mapped' => true,
+                    'mapping_error' => null,
+                ]);
+                return response()->json(['success' => true, 'message' => 'Part berhasil di-remap']);
+            }
+            
+            return response()->json(['success' => false, 'message' => 'Part tidak ditemukan di master assy'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────────────────
 
-    /**
-     * Resolve mapper berdasarkan customer code.
-     *
-     * Semua mapper mengimplementasikan SRMapperInterface dengan signature seragam:
-     *   map(array $sheet, ?Carbon $referenceDate, array $options): array
-     *
-     * $options['hidden_columns'] = array of 0-based column indices yang hidden
-     * $options['hidden_rows']    = array of 0-based row indices yang hidden
-     */
+    private function worksheetToArray($worksheet): array
+    {
+        $sheetData = [];
+        $highestRow = $worksheet->getHighestRow();
+        $highestCol = $worksheet->getHighestColumn();
+        $highestColIndex = Coordinate::columnIndexFromString($highestCol);
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $rowData = [];
+            for ($col = 1; $col <= $highestColIndex; $col++) {
+                $cellValue = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
+                $rowData[] = $cellValue;
+            }
+            $sheetData[$row - 1] = $rowData;
+        }
+
+        return $sheetData;
+    }
+
     private function resolveMapper(string $code): ?SRMapperInterface
     {
         return match (strtoupper($code)) {
@@ -445,197 +489,75 @@ class SRController extends Controller
         };
     }
 
-    /**
-     * Jalankan mapper dengan signature yang benar per customer.
-     *
-     * TYC & SAI : map($sheetData, null, $options)          ← SRMapperInterface standar
-     * YNA       : map($sheetData, null, $tempPath, $sheetIndex) ← legacy signature berbeda
-     * YC        : mapAllSheets($allSheets, $sheetNames, $hiddenSheets, null, $options) ← multi-sheet
-     *
-     * Ketika YNA & YC direfactor mengikuti interface standar, hapus branch di sini
-     * dan cukup panggil $mapper->map($sheetData, null, $options) untuk semua.
-     */
     private function runMapper(
         SRMapperInterface $mapper,
-        string            $customerCode,
-        array             $sheetData,
-        string            $tempPath,
-        int               $sheetIndex,
-        array             $options
+        string $customerCode,
+        array $sheetData,
+        string $tempPath,
+        int $sheetIndex,
+        array $options,
+        ?int $customerId = null
     ): array {
         try {
             if (strtoupper($customerCode) === 'YNA') {
-                // YNAMapper: legacy signature — menerima filePath & sheetIndex
-                return $mapper->map($sheetData, null, $tempPath, $sheetIndex);
+                return $mapper->map($sheetData, null, $tempPath, $sheetIndex, $customerId);
             }
 
             if (strtoupper($customerCode) === 'YC') {
-                // YCMapper: hanya proses sheet yang dipilih, baik untuk preview maupun upload
-                $result = $this->runYCMapper($mapper, $tempPath, $options, true, $sheetIndex);
-
-                // Validasi hasil YCMapper
-                if (!is_array($result)) {
-                    throw new \Exception('YCMapper result bukan array: ' . gettype($result));
-                }
-
-                return $result;
+                return $this->runYCMapper($mapper, $tempPath, $options, true, $sheetIndex);
             }
 
-            // TYCMapper, SAIMapper, dan semua mapper baru: signature standar
             return $mapper->map($sheetData, null, $options);
         } catch (\Exception $e) {
-            Log::error("runMapper error for {$customerCode}: " . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-            ]);
+            Log::error("runMapper error for {$customerCode}: " . $e->getMessage());
             throw $e;
         }
     }
 
-    /**
-     * Jalankan YCMapper untuk multi-sheet processing.
-     *
-     * YCMapper berbeda karena:
-     * - Satu file YC = multiple sheets (semua visible sheets)
-     * - Setiap sheet = satu SR yang berbeda
-     * - Hasil semua sheets di-merge menjadi satu array records
-     *
-     * @param bool $singleSheetMode Jika true, hanya proses sheet dengan index tertentu
-     * @param int|null $sheetIndex Index sheet untuk single sheet mode
-     */
-    private function runYCMapper(YCMapper $mapper, string $tempPath, array $options, bool $singleSheetMode = false, ?int $sheetIndex = null, bool $groupBySheet = false): array
+    private function runYCMapper(YCMapper $mapper, string $tempPath, array $options, bool $singleSheetMode = false, ?int $sheetIndex = null): array
     {
         try {
-            // Load spreadsheet untuk mendapatkan semua sheets
             $reader = $this->createReader($tempPath);
             $spreadsheet = $reader->load($tempPath);
 
-            // Baca semua sheets menjadi array
-            $allSheets    = [];
-            $sheetNames   = [];
-            $hiddenSheets = [];
+            $allSheets = [];
+            $sheetNames = [];
 
             foreach ($spreadsheet->getWorksheetIterator() as $index => $worksheet) {
                 $sheetName = $worksheet->getTitle();
-                // PhpSpreadsheet tidak punya isHidden() method langsung
-                // Hidden sheets biasanya tidak terlihat di iterator, tapi untuk aman
-                // kita anggap semua sheets dari iterator adalah visible
-                $isHidden = false; // Default: semua sheets dianggap visible
+                $sheetNames[$index] = $sheetName;
 
-                $sheetNames[$index]   = $sheetName;
-                $hiddenSheets[$index] = $isHidden;
-
-                if ($isHidden) {
-                    Log::info("YCMapper: skip hidden sheet {$index} '{$sheetName}'");
-                    continue;
-                }
-
-                // Jika single sheet mode, skip sheets yang bukan yang diminta
                 if ($singleSheetMode && $sheetIndex !== null && $index !== $sheetIndex) {
                     continue;
                 }
 
-                // Convert worksheet ke array format yang sama seperti single sheet
-                $sheetData = [];
-                $highestRow = $worksheet->getHighestRow();
-                $highestCol = $worksheet->getHighestColumn();
-                $highestColIndex = Coordinate::columnIndexFromString($highestCol);
-
-                for ($row = 1; $row <= $highestRow; $row++) {
-                    $rowData = [];
-                    for ($col = 1; $col <= $highestColIndex; $col++) {
-                        $cellValue = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
-                        $rowData[] = $cellValue;
-                    }
-                    $sheetData[$row - 1] = $rowData; // Convert to 0-based
-                }
-
-                $allSheets[$index] = $sheetData;
-
-                Log::info("YCMapper: loaded sheet {$index} '{$sheetName}' with " . count($sheetData) . " rows");
+                $allSheets[$index] = $this->worksheetToArray($worksheet);
             }
 
             if (empty($allSheets)) {
-                throw new \Exception('Tidak ada sheet visible yang bisa diproses');
+                throw new \Exception('Tidak ada sheet yang bisa diproses');
             }
 
-            // Jalankan YCMapper::mapAllSheets
-            try {
-                $sheetResults = $mapper->mapAllSheets($allSheets, $sheetNames, $hiddenSheets, null, $options);
-            } catch (\Exception $e) {
-                Log::error('YCMapper::mapAllSheets failed: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString(),
-                    'sheets_count' => count($allSheets),
-                ]);
-                throw new \Exception('YCMapper error: ' . $e->getMessage());
-            }
+            $sheetResults = $mapper->mapAllSheets($allSheets, $sheetNames, [], null, $options);
 
-            // Validasi struktur hasil sebelum flatten
             if (!is_array($sheetResults)) {
-                throw new \Exception('YCMapper::mapAllSheets harus return array, got ' . gettype($sheetResults));
+                throw new \Exception('YCMapper harus return array');
             }
 
-            if ($groupBySheet) {
-                return $sheetResults;
-            }
-
-            // Flatten semua sheet results menjadi satu array flat untuk kompatibilitas
             $result = [];
-            try {
-                foreach ($sheetResults as $sheetIndex => $sheetRecords) {
-                    if (!is_array($sheetRecords)) {
-                        Log::warning("YCMapper: sheet $sheetIndex bukan array, skip", [
-                            'type' => gettype($sheetRecords),
-                        ]);
-                        continue;
-                    }
+            foreach ($sheetResults as $sheetRecords) {
+                if (is_array($sheetRecords)) {
                     $result = array_merge($result, $sheetRecords);
-                    unset($sheetRecords); // Bebaskan memory
                 }
-            } catch (\Exception $e) {
-                Log::error('Flatten error: ' . $e->getMessage());
-                throw new \Exception('Gagal memproses hasil sheets: ' . $e->getMessage());
             }
 
-            unset($sheetResults); // Bebaskan memory sheet results
             return $result;
-
         } catch (\Exception $e) {
-            Log::error('runYCMapper error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-            ]);
+            Log::error('runYCMapper error: ' . $e->getMessage());
             throw $e;
         }
     }
 
-    /**
-     * Jalankan YCMapper dan kembalikan hasil per sheet tanpa flatten.
-     */
-    private function runYCMapperGrouped(YCMapper $mapper, string $tempPath, array $options): array
-    {
-        return $this->runYCMapper($mapper, $tempPath, $options, false, null, true);
-    }
-
-    /**
-     * Ekstrak hidden columns dan hidden rows dari file Excel menggunakan IOFactory.
-     *
-     * KENAPA IOFactory, bukan dari data Excel::toArray?
-     * Excel::toArray (Maatwebsite) meratakan data ke array PHP — informasi
-     * visual seperti hidden col/row tidak dipertahankan. IOFactory langsung
-     * membaca metadata worksheet PhpSpreadsheet sehingga kita bisa mengambil
-     * ColumnDimension::getVisible() dan RowDimension::getVisible().
-     *
-     * Hasil:
-     *   hidden_columns → array of 0-based column indices  (mis. [4] untuk col E SAI)
-     *   hidden_rows    → array of 0-based row indices
-     *
-     * Untuk SAI: col E (index 4) selalu hidden → SAIMapper sudah punya default
-     * fallback [SAIMapper::COL_HIDDEN_E] di konstruktor, tapi tetap lebih baik
-     * dibaca dari file agar akurat jika file berubah format di masa depan.
-     */
-    /**
-     * Buat reader PhpSpreadsheet berdasarkan ekstensi file.
-     * Mendukung xlsx, xlsm, dan xls.
-     */
     private function createReader(string $filePath): \PhpOffice\PhpSpreadsheet\Reader\IReader
     {
         $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
@@ -649,10 +571,10 @@ class SRController extends Controller
                 $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xls();
                 break;
             default:
-                throw new \Exception("Unsupported file type: {$extension}. Supported: xlsx, xlsm, xls");
+                throw new \Exception("Unsupported file type: {$extension}");
         }
 
-        $reader->setReadDataOnly(true); // Skip formula calculation
+        $reader->setReadDataOnly(true);
         return $reader;
     }
 
@@ -663,7 +585,6 @@ class SRController extends Controller
             'hidden_rows'    => [],
         ];
 
-        // YNA tidak butuh hidden info (pakai IOFactory sendiri di dalam mapper)
         if (strtoupper($customerCode) === 'YNA') {
             return $options;
         }
@@ -671,65 +592,38 @@ class SRController extends Controller
         try {
             $reader = $this->createReader($filePath);
             $spreadsheet = $reader->load($filePath);
-            $worksheet   = $spreadsheet->getSheet($sheetIndex);
+            $worksheet = $spreadsheet->getSheet($sheetIndex);
 
-            // ── Hidden columns ────────────────────────────────────────────────
-            // getColumnDimensions() mengembalikan array ['A' => ColumnDimension, …]
-            // hanya untuk kolom yang pernah diakses/diset → kolom yang benar-benar
-            // diatur hidden di Excel.
             foreach ($worksheet->getColumnDimensions() as $colLetter => $colDim) {
                 if (!$colDim->getVisible()) {
-                    // Konversi letter ke 0-based index (A=0, B=1, …)
                     $oneBased = Coordinate::columnIndexFromString($colLetter);
                     $options['hidden_columns'][] = $oneBased - 1;
                 }
             }
 
-            // ── Hidden rows ───────────────────────────────────────────────────
-            // getRowDimensions() mengembalikan array [rowNumber => RowDimension]
-            // rowNumber adalah 1-based (Excel convention).
             foreach ($worksheet->getRowDimensions() as $rowNum => $rowDim) {
                 if (!$rowDim->getVisible()) {
-                    // Konversi ke 0-based index agar konsisten dengan $sheet array
                     $options['hidden_rows'][] = (int) $rowNum - 1;
                 }
             }
-
-            Log::info("extractSheetOptions [{$customerCode}]: hidden_cols=" .
-                implode(',', $options['hidden_columns']) .
-                ' hidden_rows=' . implode(',', $options['hidden_rows']));
         } catch (\Throwable $e) {
-            // Jangan gagalkan upload hanya karena gagal baca hidden info.
-            // Mapper masing-masing punya fallback default untuk hidden columns.
-            Log::warning("extractSheetOptions gagal untuk {$customerCode}: " . $e->getMessage());
+            Log::warning("extractSheetOptions gagal: " . $e->getMessage());
         }
 
         return $options;
     }
 
-    /**
-     * Simpan UploadedFile ke storage/app/temp/ dengan nama unik.
-     * Mengembalikan absolute path yang stabil sepanjang request.
-     *
-     * KENAPA: getRealPath() pada UploadedFile menjadi tidak valid setelah
-     * Excel::toArray() memproses file (Laravel memindahkan file temp PHP).
-     * Dengan menyimpan dulu ke disk kita punya satu path yang aman
-     * untuk dipakai berulang kali oleh Excel::toArray() maupun IOFactory::load().
-     */
     private function storeTempFile(UploadedFile $file): string
     {
-        $ext      = $file->getClientOriginalExtension() ?: 'xlsx';
+        $ext = $file->getClientOriginalExtension() ?: 'xlsx';
         $filename = 'sr_temp_' . uniqid('', true) . '.' . $ext;
-        $relPath  = 'temp/' . $filename;
+        $relPath = 'temp/' . $filename;
 
         Storage::disk('local')->put($relPath, file_get_contents($file->getRealPath()));
 
         return Storage::disk('local')->path($relPath);
     }
 
-    /**
-     * Hapus temp file. Dipanggil di blok finally agar selalu bersih.
-     */
     private function cleanupTempFile(?string $absolutePath): void
     {
         if ($absolutePath === null || !file_exists($absolutePath)) {
@@ -747,35 +641,5 @@ class SRController extends Controller
         } catch (\Throwable $e) {
             Log::warning('Gagal hapus temp file: ' . $e->getMessage());
         }
-    }
-
-    /**
-     * Build SPP records dari mapped SR data.
-     */
-    private function buildSppRecords(array $mapped, $timestamp): array
-    {
-        return array_map(function ($item) use ($timestamp) {
-            $extra = $item['extra'] ?? null;
-            if (is_string($extra)) {
-                $extra = json_decode($extra, true);
-            }
-
-            return [
-                'customer'      => $item['customer']      ?? null,
-                'part_number'   => $item['part_number']   ?? null,
-                'model'         => $item['model']         ?? null,
-                'family'        => $item['family']        ?? null,
-                'month'         => $item['month']         ?? null,
-                'week_label'    => $extra['week_label']   ?? null,
-                'delivery_date' => $item['delivery_date'] ?? null,
-                'eta'           => $item['eta']           ?? null,
-                'etd'           => $item['etd']           ?? null,
-                'qty'           => $item['qty']           ?? 0,
-                'order_type'    => $item['order_type']    ?? null,
-                'port'          => $item['port']          ?? null,
-                'created_at'    => $timestamp,
-                'updated_at'    => $timestamp,
-            ];
-        }, $mapped);
     }
 }

@@ -24,12 +24,13 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function Index() {
-    const { customers = [], flash = {}, errors = {} } = usePage().props;
+    const { customers = [], carlines = [], flash = {}, errors = {} } = usePage().props;
 
     const [showAlert, setShowAlert] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState("");
     const [srNumber, setSrNumber] = useState("");
     const [selectedPort, setSelectedPort] = useState("");
+    const [selectedCarline, setSelectedCarline] = useState("");
     const [file, setFile] = useState(null);
     const [fileName, setFileName] = useState("");
 
@@ -98,6 +99,7 @@ export default function Index() {
 
         const formData = new FormData();
         formData.append("customer", selectedCustomer);
+        formData.append("carline_id", selectedCarline);
         formData.append("port", selectedPort);
         formData.append("file", file);
         formData.append("sheet", sheetValue);
@@ -250,6 +252,25 @@ export default function Index() {
                                                 <option key={c.id} value={c.id}>
                                                     {c.code}
                                                 </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <Squares2X2Icon className="w-4 h-4 text-gray-400" />
+                                                <span>Car Line</span>
+                                            </div>
+                                        </label>
+                                        <select
+                                            value={selectedCarline}
+                                            onChange={(e) => setSelectedCarline(e.target.value)}
+                                            className="w-full h-11 px-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1D6F42] focus:border-[#1D6F42] transition-all duration-200 text-gray-700"
+                                        >
+                                            <option value="">-- Select Car Line --</option>
+                                            {carlines.map((cl) => (
+                                                <option key={cl.id} value={cl.id}>{cl.code} - {cl.description}</option>
                                             ))}
                                         </select>
                                     </div>

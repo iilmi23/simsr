@@ -6,6 +6,11 @@ use App\Http\Controllers\SummaryController;
 use App\Http\Controllers\SPPController;
 use App\Http\Controllers\PortController;
 use App\Http\Controllers\SRController;
+use App\Http\Controllers\CarlineController;
+use App\Http\Controllers\AssyController;
+use App\Http\Controllers\TimeChartController;
+use App\Http\Controllers\ProductionWeekController;
+use App\Http\Controllers\EtdMappingController;
 use App\Models\Customer;
 use App\Models\Port;
 use App\Models\SR;
@@ -46,64 +51,90 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('dashboard');
 
-    // ===================== PPC & ADMIN PAGES =====================
-    Route::get('/sr/upload', [SRController::class, 'uploadPage'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('sr.upload.page');
+    // Production Weeks
+    Route::prefix('production-week')->name('production-week.')->group(function () {
+        Route::get('/', [ProductionWeekController::class, 'index'])->name('index');
+        Route::get('/create', [ProductionWeekController::class, 'create'])->name('create');
+        Route::post('/', [ProductionWeekController::class, 'store'])->name('store');
+        Route::get('/{productionWeek}/edit', [ProductionWeekController::class, 'edit'])->name('edit');
+        Route::put('/{productionWeek}', [ProductionWeekController::class, 'update'])->name('update');
+        Route::delete('/{productionWeek}', [ProductionWeekController::class, 'destroy'])->name('destroy');
+        Route::post('/regenerate', [ProductionWeekController::class, 'regenerate'])->name('regenerate');
+        Route::post('/import', [ProductionWeekController::class, 'import'])->name('import');
+        Route::get('/download-template', [ProductionWeekController::class, 'downloadTemplate'])->name('download-template');
+    });
 
-    Route::post('/preview', [SRController::class, 'preview'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('sr.preview');
+    // ETD Mapping
+    Route::prefix('etd-mapping')->name('etd-mapping.')->group(function () {
+        Route::get('/{customerId}', [EtdMappingController::class, 'index'])->name('index');
+        Route::put('/{id}', [EtdMappingController::class, 'update'])->name('update');
+        Route::delete('/{id}', [EtdMappingController::class, 'destroy'])->name('destroy');
+    });
 
-    Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('sr.upload');
+    // ===================== PPC & STAFF PAGES =====================
+    Route::middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])->group(function () {
 
-    Route::get('/summary', [SummaryController::class, 'index'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.index');
-    Route::get('/summary/export', [SummaryController::class, 'exportAll'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.exportAll');
-    Route::get('/summary/{id}', [SummaryController::class, 'show'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.show');
-    Route::get('/summary/{id}/data', [SummaryController::class, 'data'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.data');
-    Route::get('/summary/{id}/export', [SummaryController::class, 'export'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.export');
-    Route::delete('/summary/{id}', [SummaryController::class, 'destroy'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('summary.destroy');
+        Route::get('/sr/upload', [SRController::class, 'uploadPage'])->name('sr.upload.page');
+        Route::post('/preview', [SRController::class, 'preview'])->name('sr.preview');
+        Route::post('/sr/upload', [SRController::class, 'uploadTaiwan'])->name('sr.upload');
 
-    Route::get('/spp', [SPPController::class, 'index'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('spp');
-    Route::get('/spp/{period}', [SPPController::class, 'show'])
-        ->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-        ->name('spp.show');
+        Route::get('/summary', [SummaryController::class, 'index'])->name('summary.index');
+        Route::get('/summary/export', [SummaryController::class, 'exportAll'])->name('summary.exportAll');
+        Route::get('/summary/{id}', [SummaryController::class, 'show'])->name('summary.show');
+        Route::get('/summary/{id}/data', [SummaryController::class, 'data'])->name('summary.data');
+        Route::get('/summary/{id}/export', [SummaryController::class, 'export'])->name('summary.export');
+        Route::delete('/summary/{id}', [SummaryController::class, 'destroy'])->name('summary.destroy');
 
-    Route::get('/history', function () {
-        return Inertia::render('Admin/History');
-    })->middleware(['role:admin,staff,ppc_staff,ppc_supervisor,ppc_manager'])
-      ->name('history');
+        Route::get('/spp', [SPPController::class, 'index'])->name('spp');
+        Route::get('/spp/{period}', [SPPController::class, 'show'])->name('spp.show');
+
+        Route::get('/history', function () {
+            return Inertia::render('Admin/History');
+        })->name('history');
+    });
 
     // ===================== ADMIN ONLY =====================
     Route::middleware(['role:admin'])->group(function () {
+
         Route::get('/shipments', function () {
             return Inertia::render('Admin/Shipments');
         })->name('shipments');
 
         Route::resource('customers', CustomerController::class);
-
         Route::resource('customers.ports', PortController::class);
         Route::get('/ports', [PortController::class, 'all'])->name('ports.index');
 
-        Route::get('/carline', function () {
-            return Inertia::render('Admin/Masters/CarLine');
-        })->name('carline');
+        // Route untuk carline management
+        Route::prefix('carline')->group(function () {
+            Route::get('/', [CarlineController::class, 'index'])->name('carline.index');
+            Route::get('/create', [CarlineController::class, 'create'])->name('carline.create');
+            Route::post('/', [CarlineController::class, 'store'])->name('carline.store');
+            Route::get('/{carline}/edit', [CarlineController::class, 'edit'])->name('carline.edit');
+            Route::put('/{carline}', [CarlineController::class, 'update'])->name('carline.update');
+            Route::delete('/{carline}', [CarlineController::class, 'destroy'])->name('carline.destroy');
+            Route::get('/import', [CarlineController::class, 'importPage'])->name('carline.importPage');
+
+            // Routes untuk import Excel
+            Route::post('/get-sheets', [CarlineController::class, 'getSheets'])->name('carline.getSheets');
+            Route::post('/preview-sheet', [CarlineController::class, 'previewSheet'])->name('carline.previewSheet');
+            Route::post('/import', [CarlineController::class, 'import'])->name('carline.import');
+        });
+
+        Route::resource('assy', AssyController::class);
+        Route::get('/assy/import', [AssyController::class, 'importPage'])->name('assy.importPage');
+        Route::post('/assy/upload', [AssyController::class, 'upload'])->name('assy.upload');
+        Route::patch('/assy/{assy}/toggle-status', [AssyController::class, 'toggleStatus'])->name('assy.toggle-status');
+        Route::get('/assy/download-template/{carline_id}', [AssyController::class, 'downloadTemplate'])
+            ->name('assy.download-template');
+        
+        // Routes untuk Assy import dengan sheet selection
+        Route::post('/assy/get-sheets', [AssyController::class, 'getSheets'])->name('assy.getSheets');
+        Route::post('/assy/preview-sheet', [AssyController::class, 'previewSheet'])->name('assy.previewSheet');
+        Route::post('/assy/import-data', [AssyController::class, 'import'])->name('assy.import');
+
+        Route::get('/timechart', [TimeChartController::class, 'index'])->name('timechart.index');
+        Route::post('/timechart/preview', [TimeChartController::class, 'preview'])->name('timechart.preview');
+        Route::post('/timechart/upload', [TimeChartController::class, 'upload'])->name('timechart.upload');
 
         Route::get('/settings', function () {
             return Inertia::render('Admin/Settings');
@@ -114,8 +145,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $logs = [];
 
             if (file_exists($logFile)) {
-                $lines = array_slice(file($logFile), -50); // Get last 50 lines
-                $logs = array_reverse($lines); // Show newest first
+                $lines = array_slice(file($logFile), -50);
+                $logs = array_reverse($lines);
             }
 
             return Inertia::render('Admin/Logs', [
@@ -125,9 +156,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->name('debug.logs');
 
         // ===================== USER MANAGEMENT =====================
-        Route::prefix('admin')->group(function () {
-            Route::resource('users', \App\Http\Controllers\UserController::class);
-        });
+        Route::resource('users', \App\Http\Controllers\UserController::class);
 
         Route::get('/debug/sr-latest', function () {
             $latestUploads = \App\Models\SR::orderBy('created_at', 'desc')
@@ -147,11 +176,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]);
         })->name('debug.sr.latest');
     });
-
 });
 
 // Auth bawaan Breeze
-
-// Auth bawaan Breeze
 require __DIR__ . '/auth.php';
-

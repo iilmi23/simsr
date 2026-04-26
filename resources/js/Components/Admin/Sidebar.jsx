@@ -17,6 +17,18 @@ const Icons = {
                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
     ),
+    // timechart: () => (
+    //     <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    //         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+    //             d="M8 17H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3m-6 0h6m-6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+    //     </svg>
+    // ),
+     ProductionWeek: () => (
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M8 17H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3m-6 0h6m-6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+        </svg>
+    ),
     Customers: () => (
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
@@ -29,10 +41,16 @@ const Icons = {
                 d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     ),
-    Time Chart: () => (
+    Carline: () => (
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
-                d="M8 17H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3m-6 0h6m-6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+    ),
+    Assy: () => (
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     ),
     UploadSR: () => (
@@ -92,10 +110,16 @@ const MENU_SECTIONS = [
                 roles: ['admin', 'staff', 'ppc_staff', 'ppc_supervisor', 'ppc_manager'],
             },
             {
-                name: 'Master Data',
+                name: 'Masters',
                 icon: 'Master',
                 roles: ['admin'],
                 submenu: [
+                    // {
+                    //     name: 'Time Chart',
+                    //     icon: 'timechart',
+                    //     route: 'timechart.index',
+                    //     roles: ['admin'],
+                    // },
                     {
                         name: 'Customers',
                         icon: 'Customers',
@@ -109,9 +133,21 @@ const MENU_SECTIONS = [
                         roles: ['admin'],
                     },
                     {
-                        name: 'Time Chart',
-                        icon: 'timechart',
-                        route: 'timechart',
+                       name: 'Week',
+                        icon: 'ProductionWeek',
+                        route: 'production-week.index',
+                        roles: ['admin'], 
+                    },
+                    {
+                        name: 'Carline',
+                        icon: 'Carline',
+                        route: 'carline.index',
+                        roles: ['admin'],
+                    },
+                    {
+                        name: 'Assy',
+                        icon: 'Assy',
+                        route: 'assy.index',
                         roles: ['admin'],
                     },
                 ],

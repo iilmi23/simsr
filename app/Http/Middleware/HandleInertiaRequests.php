@@ -35,6 +35,7 @@ class HandleInertiaRequests extends Middleware
                     ? $request->user()->only(['id', 'name', 'email', 'role'])
                     : null,
             ],
+            'csrf_token' => csrf_token(),
             'flash' => [
                 'success' => session('success'),
                 'error' => session('error'),

@@ -66,6 +66,7 @@ export default function AdminLayout({ title, children }) {
                 <title>{headTitle}</title>
                 <link rel="icon" type="image/png" sizes="32x32" href="/images/logo.png" />
                 <link rel="shortcut icon" type="image/png" href="/images/logo.png" />
+                <meta name="csrf-token" content={usePage().props.csrf_token} />
             </Head>
 
             <div className="min-h-screen bg-gray-50 flex">

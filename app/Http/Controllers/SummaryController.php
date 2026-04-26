@@ -95,7 +95,11 @@ class SummaryController extends Controller
                 'customer', 'month', 'search', 'part_number', 'order_type',
                 'etd_start', 'etd_end', 'eta_start', 'eta_end',
             ]),
-            'flash'     => session('success') ? ['success' => session('success')] : null,
+            'flash'     => session('flash') ?: [
+                'success' => session('success'),
+                'warning' => session('warning'),
+                'error'   => session('error'),
+            ],
         ]);
     }
 

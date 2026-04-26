@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('srs', function (Blueprint $table) {
-            $table->string('assy_no')->nullable()->after('part_number');
+            if (!Schema::hasColumn('srs', 'year')) {
+                $table->integer('year')->nullable()->after('month');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('srs', function (Blueprint $table) {
-            $table->dropColumn('assy_no');
+            if (Schema::hasColumn('srs', 'year')) {
+                $table->dropColumn('year');
+            }
         });
     }
 };

@@ -26,51 +26,53 @@ createInertiaApp({
 });
 
 // Suppress browser extension message passing errors (non-critical)
-window.addEventListener('error', (event) => {
-    if (event.message?.includes('message channel closed') || 
-        event.message?.includes('asynchronous response') ||
-        event.message?.includes('A listener indicated an asynchronous response by returning true') ||
-        event.message?.includes('Extension context invalidated')) {
-        console.warn('⚠️ Browser extension communication (non-critical)', event.message);
-        event.preventDefault();
-        return false;
-    }
-});
+// These errors are common when Chrome extensions try to communicate with pages
+const isExtensionError = (message = '') => {
+    const msg = String(message).toLowerCase();
+    return msg.includes('message channel closed') || 
+           msg.includes('asynchronous response') ||
+           msg.includes('a listener indicated') ||
+           msg.includes('extension context invalidated') ||
+           msg.includes('the page you are on') ||
+           msg.includes('chrome-extension://');
+};
 
-// Also suppress unhandled promise rejections from extensions
+// Handle synchronous errors
+window.addEventListener('error', (event) => {
+    if (isExtensionError(event.message)) {
+        event.preventDefault();
+        return true;
+    }
+}, true); // Use capture phase to catch early
+
+// Handle promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
     const message = reason?.message || reason?.toString() || '';
     
-    if (message.includes('message channel closed') ||
-        message.includes('asynchronous response') ||
-        message.includes('A listener indicated an asynchronous response by returning true') ||
-        message.includes('Extension context invalidated')) {
-        console.warn('⚠️ Browser extension promise rejection (non-critical)', reason);
+    if (isExtensionError(message)) {
         event.preventDefault();
-        return false;
     }
-});
+}, true); // Use capture phase
 
-// Additional suppression for Chrome extension errors
-if (window.chrome && window.chrome.runtime) {
+// Override Chrome extension message handler
+if (typeof window !== 'undefined' && window.chrome?.runtime) {
     try {
-        // Override sendMessage to catch extension errors
-        const originalSendMessage = window.chrome.runtime.sendMessage;
-        if (originalSendMessage) {
-            window.chrome.runtime.sendMessage = function(...args) {
-                return originalSendMessage.apply(this, args).catch(err => {
-                    if (err?.message?.includes('message channel closed') ||
-                        err?.message?.includes('asynchronous response')) {
-                        console.warn('⚠️ Chrome extension sendMessage error (suppressed)', err);
-                        return Promise.resolve(null);
-                    }
-                    throw err;
-                });
-            };
+        // Listen for messages and always respond
+        if (window.chrome.runtime.onMessage) {
+            window.chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+                try {
+                    sendResponse({ received: true });
+                } catch (err) {
+                    // Ignore if port is already closed
+                }
+                // Returning true indicates you want to send a response asynchronously
+                // But we already sent it synchronously, so return false
+                return false;
+            });
         }
     } catch (e) {
-        // Ignore errors in extension override
+        // Ignore initialization errors
     }
 }
 
@@ -93,7 +95,45 @@ const ROUTES = {
     'customers.ports.update': '/customers/{customer}/ports/{port}',
     'customers.ports.destroy': '/customers/{customer}/ports/{port}',
     'ports.index': '/ports',
-    carline: '/carline',
+    'carline.index': '/carline',
+    'carline.importPage': '/carline/import',
+    'carline.getSheets': '/carline/get-sheets',
+    'carline.previewSheet': '/carline/preview-sheet',
+    'carline.import': '/carline/import',
+    'carline.create': '/carline/create',
+    'carline.store': '/carline',
+    'carline.show': '/carline/{carline}',
+    'carline.edit': '/carline/{carline}/edit',
+    'carline.update': '/carline/{carline}',
+    'carline.destroy': '/carline/{carline}',
+
+    'timechart.index': '/timechart',
+
+    'production-week.index': '/production-week',
+    'production-week.create': '/production-week/create',
+    'production-week.store': '/production-week',
+    'production-week.show': '/production-week/{week}',
+    'production-week.edit': '/production-week/{week}/edit',
+    'production-week.update': '/production-week/{week}',
+    'production-week.destroy': '/production-week/{week}',
+
+    'assy.index': '/assy',
+    'assy.importPage': '/assy/import',
+    'assy.create': '/assy/create',
+    'assy.store': '/assy',
+    'assy.show': '/assy/{assy}',
+    'assy.edit': '/assy/{assy}/edit',
+    'assy.update': '/assy/{assy}',
+    'assy.destroy': '/assy/{assy}',
+    'assy.upload': '/assy/upload',
+    'assy.toggle-status': '/assy/{assy}/toggle-status',
+    'assy.download-template': '/assy/download-template/{carline_id}',
+    'assy.download': '/assy/download/{assy}',
+    'assy.getSheets': '/assy/get-sheets',
+    'assy.previewSheet': '/assy/preview-sheet',
+    'assy.import': '/assy/import-data',
+
+
     'sr.upload.page': '/sr/upload',
     'sr.preview': '/preview',
     'sr.upload': '/sr/upload',

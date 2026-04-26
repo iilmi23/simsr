@@ -10,6 +10,8 @@ class SR extends Model
 
     protected $fillable = [
         'customer',
+        'carline_id',
+        'assy_id',
         'source_file',
         'upload_batch',
         'sheet_index',
@@ -23,17 +25,31 @@ class SR extends Model
         'eta',
         'week',
         'month',
+        'year',
         'order_type',
         'route',
         'port',
         'model',
         'family',
+        'is_mapped',
+        'mapping_error',
         'extra',
     ];
 
     protected $casts = [
         'extra' => 'array',
     ];
+
+    // Relasi
+    public function carline()
+    {
+        return $this->belongsTo(CarLine::class, 'carline_id', 'id');
+    }
+
+    public function assy()
+    {
+        return $this->belongsTo(Assy::class, 'assy_id', 'id');
+    }
 
     public function getSummaryData()
     {

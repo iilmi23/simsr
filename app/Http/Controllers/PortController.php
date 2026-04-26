@@ -39,12 +39,12 @@ class PortController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'keterangan' => 'nullable|string'
+            'description' => 'nullable|string'
         ]);
 
         $customer->ports()->create([
             'name' => $validated['name'],
-            'keterangan' => $validated['keterangan'] ?? null,
+            'description' => $validated['description'] ?? null,
         ]);
 
         return redirect()
@@ -64,12 +64,12 @@ class PortController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'keterangan' => 'nullable|string'
+            'description' => 'nullable|string'
         ]);
 
         $port->update([
             'name' => $validated['name'],
-            'keterangan' => $validated['keterangan'] ?? null,
+            'description' => $validated['description'] ?? null,
         ]);
 
         return redirect()

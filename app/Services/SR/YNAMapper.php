@@ -3,6 +3,7 @@
 namespace App\Services\SR;
 
 use Illuminate\Support\Facades\Log;
+use App\Models\ProductionWeek;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -49,7 +50,8 @@ class YNAMapper implements SRMapperInterface
         array   $sheet,
         ?Carbon $referenceDate = null,
         ?string $filePath = null,
-        int     $sheetIndex = 0
+        int     $sheetIndex = 0,
+        ?int    $customerId = null
     ): array {
         if (empty($sheet) || !is_array($sheet)) {
             throw new \Exception("Sheet kosong atau tidak valid");
@@ -67,14 +69,14 @@ class YNAMapper implements SRMapperInterface
             );
         }
 
-        return $this->mapFromFile($filePath, $referenceDate);
+        return $this->mapFromFile($filePath, $referenceDate, $customerId);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // PRIVATE — Main mapping logic
     // ─────────────────────────────────────────────────────────────────────
 
-    private function mapFromFile(string $filePath, ?Carbon $referenceDate): array
+    private function mapFromFile(string $filePath, ?Carbon $referenceDate, ?int $customerId): array
     {
         // Load spreadsheet dengan kalkulasi formula
         $spreadsheet = IOFactory::load($filePath);
@@ -129,7 +131,7 @@ class YNAMapper implements SRMapperInterface
 
         foreach ($psaIndices as $psaIdx) {
             try {
-                $records = $this->parseBlock($allRows, $psaIdx);
+                $records = $this->parseBlock($allRows, $psaIdx, $customerId);
 
                 if (!empty($records)) {
                     $result        = array_merge($result, $records);
@@ -172,7 +174,7 @@ class YNAMapper implements SRMapperInterface
      * @param int    $psaIdx     Index baris PSA# (0-based)
      * @return array Records hasil parse blok
      */
-    private function parseBlock(array $allRows, int $psaIdx): array
+    private function parseBlock(array $allRows, int $psaIdx, ?int $customerId = null): array
     {
         $records = [];
 
@@ -244,20 +246,27 @@ class YNAMapper implements SRMapperInterface
             $eta    = $this->parseDateValue($etaRaw)
                       ?? $etd->copy()->addDays(self::ETA_FALLBACK_DAYS);
 
-            // Qty
+            // Qty — Parse dengan robust handling
             $qtyRaw = $netRow[$colIdx] ?? null;
-
-            // Skip kolom jika formula string (belum terhitung)
-            if (is_string($qtyRaw) && str_starts_with(trim($qtyRaw), '=')) {
-                Log::debug("Block row " . ($psaIdx + 1) . " col " . ($colIdx + 1) . ": qty masih formula, skip.");
-                continue;
-            }
-
-            // Nilai kosong / spasi → qty = 0
+            
+            // Jika nilai kosong/spasi → qty = 0 (tapi jangan skip, tetap buat record dengan qty 0)
             if ($qtyRaw === null || $qtyRaw === '' || (is_string($qtyRaw) && trim($qtyRaw) === '')) {
                 $qty = 0;
             } else {
-                $qty = $this->parseInteger($qtyRaw) ?? 0;
+                // Jika formula string (=...), coba parse integer (walau bisa gagal)
+                // Jangan skip kolom, tapi catat di log bahwa qty potentially salah
+                if (is_string($qtyRaw) && str_starts_with(trim($qtyRaw), '=')) {
+                    $qty = $this->parseInteger($qtyRaw);
+                    if ($qty === null) {
+                        // Formula tidak bisa diparsing, default qty = 0
+                        $qty = 0;
+                        Log::warning("Block row " . ($psaIdx + 1) . " part '{$partNumber}' col " . ($colIdx + 1) . ": formula qty tidak terbaca, default 0. Raw: {$qtyRaw}");
+                    } else {
+                        Log::debug("Block row " . ($psaIdx + 1) . " part '{$partNumber}' col " . ($colIdx + 1) . ": formula qty terbaca: {$qty}");
+                    }
+                } else {
+                    $qty = $this->parseInteger($qtyRaw) ?? 0;
+                }
             }
 
             // Skip nilai negatif (data tidak valid / adjustment row)
@@ -266,6 +275,7 @@ class YNAMapper implements SRMapperInterface
                 continue;
             }
 
+            $weekInfo = $this->resolveWeekFromEtd($customerId, $etd);
             $records[] = [
                 'customer'      => 'YNA',
                 'source_file'   => null,
@@ -274,8 +284,8 @@ class YNAMapper implements SRMapperInterface
                 'delivery_date' => $eta->toDateString(),
                 'eta'           => $eta->toDateString(),
                 'etd'           => $etd->toDateString(),
-                'week'          => $eta->format('W'),
-                'month'         => $eta->format('Y-m'),
+                'week'          => $weekInfo['week'] ?? null,
+                'month'         => $weekInfo['month'] ?? $eta->format('Y-m'),
                 'order_type'    => 'FIRM',
                 'model'         => null,
                 'family'        => null,
@@ -286,6 +296,7 @@ class YNAMapper implements SRMapperInterface
                     'col'          => $colIdx + 1,
                     'etd_raw'      => $etd->toDateString(),
                     'eta_fallback' => ($this->parseDateValue($etaRaw) === null),
+                    'week_source'  => $weekInfo['source'] ?? 'manual',
                 ]),
             ];
         }
@@ -295,6 +306,143 @@ class YNAMapper implements SRMapperInterface
         }
 
         return $records;
+    }
+
+    public function extractEtdRangeFromFile(string $filePath): array
+    {
+        $spreadsheet = IOFactory::load($filePath);
+        $worksheet = null;
+
+        foreach ($spreadsheet->getWorksheetIterator() as $ws) {
+            if (strtolower(trim($ws->getTitle())) === strtolower(self::SHEET_NAME)) {
+                $worksheet = $ws;
+                break;
+            }
+        }
+
+        if ($worksheet === null) {
+            $worksheet = $spreadsheet->getActiveSheet();
+        }
+
+        $allRows = [];
+        foreach ($worksheet->getRowIterator() as $row) {
+            $rowData = [];
+            foreach ($row->getCellIterator() as $cell) {
+                $rowData[] = $cell->getCalculatedValue();
+            }
+            $allRows[] = $rowData;
+        }
+
+        $dates = [];
+        foreach ($this->findPsaRows($allRows) as $psaIdx) {
+            $etdRow = $allRows[$psaIdx + 3] ?? [];
+            foreach ($etdRow as $colIdx => $value) {
+                $etd = $this->parseDateValue($value);
+                if ($etd !== null) {
+                    $dates[] = $etd->toDateString();
+                }
+            }
+        }
+
+        if (empty($dates)) {
+            return [null, null];
+        }
+
+        return [min($dates), max($dates)];
+    }
+
+    /**
+     * Extract week numbers mapping dari file YNA (jika ada di header atau label).
+     * 
+     * CATATAN: 
+     * - File YNA standard tidak memiliki week label eksplisit
+     * - Week number biasa di-resolve dari ProductionWeek berdasarkan ETD
+     * - Method ini tersedia untuk future enhancement jika ada week label
+     * 
+     * @return array [ colIdx => weekNumber ]
+     */
+    public function extractWeekNumbersFromFile(string $filePath): array
+    {
+        $spreadsheet = IOFactory::load($filePath);
+        $worksheet = null;
+
+        foreach ($spreadsheet->getWorksheetIterator() as $ws) {
+            if (strtolower(trim($ws->getTitle())) === strtolower(self::SHEET_NAME)) {
+                $worksheet = $ws;
+                break;
+            }
+        }
+
+        if ($worksheet === null) {
+            $worksheet = $spreadsheet->getActiveSheet();
+        }
+
+        $allRows = [];
+        foreach ($worksheet->getRowIterator() as $row) {
+            $rowData = [];
+            foreach ($row->getCellIterator() as $cell) {
+                $rowData[] = $cell->getCalculatedValue();
+            }
+            $allRows[] = $rowData;
+        }
+
+        $weekMap = [];
+        
+        // Cari row yang kemungkinan memiliki week labels
+        // Biasanya row pertama atau row sebelum data dimulai
+        for ($rowIdx = 0; $rowIdx < min(5, count($allRows)); $rowIdx++) {
+            $row = $allRows[$rowIdx];
+            $weekCount = 0;
+            
+            // Scan kolom data (dari idx 9 = kolom J)
+            for ($colIdx = self::DATA_COL_START; $colIdx < count($row); $colIdx++) {
+                $cellVal = $this->cleanString($row[$colIdx] ?? '');
+                
+                // Cari pattern "Week 1", "W1", "Week1", "1", dll
+                if (preg_match('/^w(?:eek)?\s*(\d+)$/i', $cellVal, $m)) {
+                    $weekNum = (int) $m[1];
+                    $weekMap[$colIdx] = $weekNum;
+                    $weekCount++;
+                } elseif (is_numeric($cellVal) && $cellVal > 0 && $cellVal < 53) {
+                    // Angka murni 1-52 (week number)
+                    $weekMap[$colIdx] = (int) $cellVal;
+                    $weekCount++;
+                }
+            }
+            
+            // Jika found week labels konsisten (>= 3 weeks), gunakan ini
+            if ($weekCount >= 3) {
+                Log::info("Extract week numbers dari row " . ($rowIdx + 1) . ": " . count($weekMap) . " weeks found");
+                return $weekMap;
+            }
+        }
+        
+        Log::debug("No explicit week labels found in file, will use ETD-based resolution");
+        return [];
+    }
+
+    private function resolveWeekFromEtd(?int $customerId, Carbon $etd): array
+    {
+        $week = null;
+        if ($customerId !== null) {
+            $week = ProductionWeek::findByDate($customerId, $etd);
+        }
+
+        if ($week) {
+            return [
+                'week'   => $week->week_no,
+                'month'  => $week->month_name,
+                'year'   => $week->year,
+                'source' => 'production_week',
+            ];
+        }
+
+        return [
+            'week'   => null,
+            'month'  => $etd->format('Y-m'),
+            'year'   => $etd->year,
+            'source' => 'fallback',
+        ];
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -332,12 +480,14 @@ class YNAMapper implements SRMapperInterface
         }
 
         // Excel serial number (float atau int > 40000)
+        // Angka > 40000 adalah serial date mulai dari 1900
         if (is_float($value) || (is_int($value) && $value > 40000)) {
             try {
                 $dt = ExcelDate::excelToDateTimeObject($value);
                 return Carbon::instance($dt)->startOfDay();
             } catch (\Throwable $e) {
                 // fall through ke string parsing
+                Log::debug("ExcelDate conversion failed for value: " . var_export($value, true));
             }
         }
 
@@ -350,6 +500,7 @@ class YNAMapper implements SRMapperInterface
                 return null;
             }
 
+            // Coba format standar lebih dulu (ketat)
             $formats = ['Y-m-d', 'Y/m/d', 'd/m/Y', 'm/d/Y', 'd-m-Y', 'n/j/Y', 'n/j/y'];
             foreach ($formats as $fmt) {
                 try {
@@ -366,12 +517,12 @@ class YNAMapper implements SRMapperInterface
             // Last resort: Carbon::parse (sangat fleksibel tapi kurang strict)
             try {
                 $parsed = Carbon::parse($value);
-                // Sanity check: tahun harus masuk akal
+                // Sanity check: tahun harus masuk akal (2000-2100)
                 if ($parsed->year >= 2000 && $parsed->year <= 2100) {
                     return $parsed->startOfDay();
                 }
             } catch (\Throwable $e) {
-                // ignore
+                Log::debug("Date parsing failed for string: " . $value);
             }
         }
 
@@ -384,8 +535,28 @@ class YNAMapper implements SRMapperInterface
         if (is_int($value)) return $value;
         if (is_float($value)) return (int) round($value);
 
-        $cleaned = preg_replace('/[^0-9\-]/', '', (string) $value);
-        return is_numeric($cleaned) ? (int) $cleaned : null;
+        // Handle string dengan angka
+        $strVal = (string) $value;
+        $strVal = trim($strVal);
+
+        // Skip formula string
+        if (str_starts_with($strVal, '=')) {
+            return null;
+        }
+
+        // Extract digits (allow negative)
+        $cleaned = preg_replace('/[^0-9\-]/', '', $strVal);
+        
+        if (empty($cleaned)) return null;
+        
+        $int = (int) $cleaned;
+        
+        // Sanity check: qty tidak boleh sangat besar (> 1 juta)
+        if (abs($int) > 1000000) {
+            return null;
+        }
+        
+        return $int;
     }
 
     private function cleanString($value): string

@@ -12,8 +12,8 @@ class Port extends Model
     protected $fillable = [
         'customer_id',
         'name',
-        'code',
-        'keterangan'
+        'description',
+        'is_active'
     ];
 
     public function customer()
